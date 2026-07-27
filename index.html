@@ -93,9 +93,15 @@
   .tile .who{position:absolute; left:10px; bottom:10px; background:rgba(0,0,0,.7);
     padding:4px 10px 4px 4px; border-radius:20px; font-size:12.5px;
     display:flex; align-items:center; gap:7px}
+  .tile .fs{position:absolute; right:10px; bottom:10px; background:rgba(0,0,0,.7);
+    padding:6px 11px; border-radius:10px; font-size:16px; line-height:1; opacity:.85}
+  .tile .fs:hover{opacity:1}
+  .tile video:fullscreen{aspect-ratio:auto; height:100%; object-fit:contain}
 
   aside{background:var(--panel); border-left:1px solid var(--line);
-    display:grid; grid-template-rows:auto auto 1fr auto; min-height:0}
+    display:grid; grid-template-rows:auto auto 1fr auto; min-height:0; height:100%}
+  @media (max-width:800px){ aside{height:auto; max-height:52vh; border-left:none;
+    border-top:1px solid var(--line)} }
   .side-title{padding:12px 14px 6px; font-size:12px; letter-spacing:.6px;
     text-transform:uppercase; color:var(--muted)}
   #people{padding:0 14px 12px; display:flex; flex-direction:column; gap:8px}
@@ -106,7 +112,8 @@
   .dot.bad{background:var(--danger)}
   .dot.wait{background:#e0a35c}
   #log{overflow-y:auto; padding:10px 14px; display:flex; flex-direction:column; gap:10px;
-    border-top:1px solid var(--line); min-height:0}
+    border-top:1px solid var(--line); min-height:140px}
+  #log:empty::after{content:"Здесь появятся сообщения."; color:var(--muted); font-size:13px}
   .msg{font-size:14px; word-break:break-word; display:flex; gap:8px; align-items:flex-start}
   .msg .body{min-width:0}
   .msg .nick{font-weight:600; font-size:13px}
@@ -377,8 +384,21 @@ function showVideo(peerId, stream, label, avatar) {
     tile = document.createElement('div');
     tile.className = 'tile';
     tile.id = tileId(peerId);
-    tile.innerHTML = '<video autoplay playsinline></video><div class="who"></div>';
+    tile.innerHTML =
+      '<video autoplay playsinline></video>' +
+      '<div class="who"></div>' +
+      '<button class="fs" title="Во весь экран">⛶</button>';
     stage.appendChild(tile);
+
+    const video = tile.querySelector('video');
+    const goFull = () => {
+      const target = video.requestFullscreen ? video : tile;
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (target.requestFullscreen) target.requestFullscreen();
+      else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen(); // iPhone
+    };
+    tile.querySelector('.fs').onclick = goFull;
+    video.ondblclick = goFull;
   }
   const who = tile.querySelector('.who');
   who.innerHTML = '';
@@ -660,7 +680,18 @@ async function join(room) {
   history.replaceState(null, '', '/r/' + encodeURIComponent(room));
 
   setStatus('Подключаюсь…');
-  await initMic();
+
+  // ВАЖНО: сначала связь с сервером, потом микрофон.
+  // Иначе окно «разрешить микрофон?» подвешивает вообще всё:
+  // человек не видит участников и не получает сообщения.
+  initMic().then(() => {
+    // Микрофон пришёл позже — доносим дорожки в уже открытые соединения.
+    if (!micStream) return;
+    for (const state of peers.values()) {
+      const has = state.pc.getSenders().some((s) => s.track && s.track.kind === 'audio');
+      if (!has) for (const t of micStream.getTracks()) state.pc.addTrack(t, micStream);
+    }
+  });
 
   const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
   ws = new WebSocket(proto + location.host);
@@ -718,7 +749,23 @@ async function join(room) {
     }
   };
 
-  ws.onclose = () => setStatus('Соединение потеряно — обновите страницу');
+  // Если за 8 секунд не подключились — говорим прямо, а не крутим «Подключаюсь…»
+  const slow = setTimeout(() => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      banner('Не получается связаться с сервером. Обновите страницу; если не помогло — проверьте интернет.');
+    }
+  }, 8000);
+
+  ws.addEventListener('open', () => clearTimeout(slow));
+
+  ws.onclose = () => {
+    clearTimeout(slow);
+    setStatus('Связь потеряна');
+    banner('Соединение с сервером разорвано.', {
+      label: 'Обновить страницу',
+      onClick: () => location.reload()
+    });
+  };
   ws.onerror = () => setStatus('Ошибка соединения');
 }
 

@@ -81,8 +81,9 @@
   .room-name small{color:var(--muted); font-weight:400}
   .spacer{flex:1}
   .status{font-size:13px; color:var(--muted)}
-  main{display:grid; grid-template-columns:1fr 290px; min-height:0}
+  main{display:grid; grid-template-columns:1fr 290px; grid-template-rows:100%; min-height:0}
   @media (max-width:800px){ main{grid-template-columns:1fr; grid-template-rows:1fr auto} }
+  @media (max-width:800px){ .tile .fs{padding:9px 14px; font-size:18px} }
 
   #stage{padding:14px; overflow:auto; display:grid; gap:12px;
     grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); align-content:start}
@@ -282,8 +283,10 @@ let myId = null;
 let roomId = null;
 let micStream = null;     // мой микрофон
 let screenStream = null;  // мой экран (если показываю)
-const peers = new Map();       // peerId -> { pc, name, avatar, polite, ... }
-const pendingInfo = new Map(); // peerId -> { name, avatar } до установки соединения
+const peers = new Map();  // peerId -> { pc, name, avatar, polite, ... } — только медиа-соединения
+// Список участников ведём по данным сервера, а НЕ по состоянию видеосвязи.
+// Иначе человек без микрофона остаётся невидимым для остальных.
+const roster = new Map(); // peerId -> { name, avatar }
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage'), logEl = $('log'), peopleEl = $('people');
@@ -346,8 +349,9 @@ function renderPeople() {
   const micOn = !!(track && track.enabled);
   const meLabel = profile.name + ' (вы)' + (micStream ? '' : ' · без микрофона');
   const rows = [{ name: meLabel, avatar: profile, on: micOn, conn: 'connected' }];
-  for (const p of peers.values()) {
-    rows.push({ name: p.name, avatar: p.avatar, on: true, conn: p.conn || 'new' });
+  for (const [id, info] of roster) {
+    const pc = peers.get(id);
+    rows.push({ name: info.name, avatar: info.avatar, on: true, conn: pc ? (pc.conn || 'new') : 'connected' });
   }
 
   for (const r of rows) {
@@ -477,6 +481,12 @@ function createPeer(peerId, name, avatar, polite) {
 
   addLocalTracks(pc);
 
+  // Служебный канал нужен, чтобы соединение установилось ДАЖЕ если ни у кого
+  // нет микрофона. Иначе демонстрация экрана потом не сможет никуда уйти.
+  if (!polite) {
+    try { pc.createDataChannel('keepalive'); } catch {}
+  }
+
   pc.onnegotiationneeded = async () => {
     try {
       state.makingOffer = true;
@@ -527,7 +537,7 @@ function createPeer(peerId, name, avatar, polite) {
 async function handleSignal(peerId, data) {
   let state = peers.get(peerId);
   if (!state) {
-    const info = pendingInfo.get(peerId) || {};
+    const info = roster.get(peerId) || {};
     state = createPeer(peerId, info.name, info.avatar, true); // отвечающая сторона — вежливая
   }
   const pc = state.pc;
@@ -563,14 +573,16 @@ async function handleSignal(peerId, data) {
 }
 
 function dropPeer(peerId) {
+  const info = roster.get(peerId);
   const state = peers.get(peerId);
-  if (!state) return;
-  state.pc.close();
-  peers.delete(peerId);
-  pendingInfo.delete(peerId);
+  if (state) {
+    state.pc.close();
+    peers.delete(peerId);
+  }
+  roster.delete(peerId);
   removeVideo(peerId);
   detachAudio(peerId);
-  logSys(state.name + ' вышел из комнаты.');
+  logSys(((info && info.name) || (state && state.name) || 'Участник') + ' вышел из комнаты.');
   renderPeople();
 }
 
@@ -711,26 +723,26 @@ async function join(room) {
       setStatus('В сети');
       logSys('Вы вошли в комнату «' + room + '».');
       // Я новенький → я инициирую соединение с каждым, кто уже здесь (я невежливый)
-      for (const p of msg.peers) createPeer(p.id, p.name, p.avatar, false);
+      for (const p of msg.peers) {
+        roster.set(p.id, { name: p.name, avatar: p.avatar });
+        createPeer(p.id, p.name, p.avatar, false);
+      }
       renderPeople();
     }
 
     else if (msg.type === 'peer-joined') {
-      // Соединение не создаём — новичок сам пришлёт offer. Пока запомним, кто это.
+      // Медиа-соединение не создаём — новичок сам пришлёт offer.
       logSys(msg.name + ' присоединился.');
-      pendingInfo.set(msg.id, { name: msg.name, avatar: msg.avatar });
+      roster.set(msg.id, { name: msg.name, avatar: msg.avatar });
       const existing = peers.get(msg.id);
-      if (existing) {
-        existing.name = msg.name;
-        existing.avatar = msg.avatar;
-        renderPeople();
-      }
+      if (existing) { existing.name = msg.name; existing.avatar = msg.avatar; }
+      renderPeople();
     }
 
     else if (msg.type === 'signal') {
       handleSignal(msg.from, msg.data).then(() => {
         const st = peers.get(msg.from);
-        const info = pendingInfo.get(msg.from);
+        const info = roster.get(msg.from);
         if (st && info && st.name !== info.name) {
           st.name = info.name;
           st.avatar = info.avatar;

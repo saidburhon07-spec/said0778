@@ -1,0 +1,15 @@
+{
+  "name": "vmeste",
+  "version": "0.1.0",
+  "description": "Комнаты для совместного просмотра: демонстрация экрана + голосовой чат",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

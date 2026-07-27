@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Вместе — смотрим вместе</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel-2:#1e222b; --line:#2a2f3a;
+    --text:#e7eaf0; --muted:#8d94a3; --accent:#5b8cff; --accent-2:#3fb27f; --danger:#e05c5c;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  }
+  button{font:inherit; cursor:pointer; border:none; border-radius:10px; padding:10px 16px;
+    background:var(--panel-2); color:var(--text); transition:filter .15s}
+  button:hover:not(:disabled){filter:brightness(1.25)}
+  button:disabled{opacity:.45; cursor:not-allowed}
+  .primary{background:var(--accent); color:#fff; font-weight:600}
+  .danger{background:var(--danger); color:#fff}
+  input{font:inherit; background:var(--panel-2); color:var(--text);
+    border:1px solid var(--line); border-radius:10px; padding:11px 14px; width:100%}
+  input:focus{outline:none; border-color:var(--accent)}
+
+  /* --- Аватар --- */
+  .av{border-radius:50%; display:grid; place-items:center; flex:none;
+      line-height:1; user-select:none}
+  .av-sm{width:26px; height:26px; font-size:14px}
+  .av-md{width:34px; height:34px; font-size:18px}
+  .av-lg{width:72px; height:72px; font-size:38px; cursor:pointer;
+         box-shadow:0 0 0 3px var(--panel), 0 0 0 5px transparent; transition:box-shadow .15s}
+  .av-lg:hover{box-shadow:0 0 0 3px var(--panel), 0 0 0 5px var(--accent)}
+
+  /* --- Экран входа --- */
+  #lobby{min-height:100%; display:grid; place-items:center; padding:24px}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:18px;
+    padding:28px; width:100%; max-width:440px}
+  .logo{font-size:30px; font-weight:700; letter-spacing:-.5px; margin:0 0 6px}
+  .logo span{color:var(--accent)}
+  .sub{color:var(--muted); margin:0 0 22px; font-size:14px}
+  .field{margin-bottom:14px}
+  .field label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px}
+  .hint{font-size:12.5px; color:var(--muted); margin-top:18px; line-height:1.55}
+
+  .profile-row{display:flex; align-items:center; gap:16px; margin-bottom:18px}
+  .profile-row .grow{flex:1; min-width:0}
+  .tap{font-size:12px; color:var(--muted); text-align:center; margin-top:6px}
+
+  #picker{display:none; background:var(--panel-2); border:1px solid var(--line);
+    border-radius:14px; padding:14px; margin-bottom:16px}
+  #picker.on{display:block}
+  .pick-title{font-size:12px; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.6px; margin-bottom:10px}
+  .emoji-grid{display:grid; grid-template-columns:repeat(8,1fr); gap:6px; margin-bottom:16px}
+  .emoji-grid button{padding:0; height:36px; font-size:19px; background:var(--panel); border-radius:9px}
+  .emoji-grid button.sel{outline:2px solid var(--accent)}
+  .color-row{display:flex; gap:8px; flex-wrap:wrap}
+  .color-row button{width:30px; height:30px; padding:0; border-radius:50%}
+  .color-row button.sel{outline:2px solid #fff; outline-offset:2px}
+
+  .rooms{margin-top:16px}
+  .rooms .pick-title{margin-bottom:8px}
+  .chips{display:flex; gap:8px; flex-wrap:wrap}
+  .chips button{background:var(--panel-2); font-size:13px; padding:7px 12px; border-radius:20px}
+
+  /* --- Комната --- */
+  #room{display:none; height:100%; grid-template-rows:auto 1fr}
+  #room.on{display:grid}
+  header{display:flex; align-items:center; gap:10px; padding:12px 16px;
+    background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap}
+  .room-name{font-weight:600}
+  .room-name small{color:var(--muted); font-weight:400}
+  .spacer{flex:1}
+  .status{font-size:13px; color:var(--muted)}
+  main{display:grid; grid-template-columns:1fr 290px; min-height:0}
+  @media (max-width:800px){ main{grid-template-columns:1fr; grid-template-rows:1fr auto} }
+
+  #stage{padding:14px; overflow:auto; display:grid; gap:12px;
+    grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); align-content:start}
+  #stage:empty::after{content:"Пока никто не показывает экран. Нажмите «Показать экран».";
+    color:var(--muted); font-size:14px; grid-column:1/-1; text-align:center; padding:60px 20px}
+  .tile{background:#000; border:1px solid var(--line); border-radius:14px; overflow:hidden; position:relative}
+  .tile video{width:100%; display:block; aspect-ratio:16/9; object-fit:contain; background:#000}
+  .tile .who{position:absolute; left:10px; bottom:10px; background:rgba(0,0,0,.7);
+    padding:4px 10px 4px 4px; border-radius:20px; font-size:12.5px;
+    display:flex; align-items:center; gap:7px}
+
+  aside{background:var(--panel); border-left:1px solid var(--line);
+    display:grid; grid-template-rows:auto auto 1fr auto; min-height:0}
+  .side-title{padding:12px 14px 6px; font-size:12px; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--muted)}
+  #people{padding:0 14px 12px; display:flex; flex-direction:column; gap:8px}
+  .person{display:flex; align-items:center; gap:9px; font-size:14px}
+  .person .nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--accent-2); flex:none; margin-left:auto}
+  .dot.off{background:var(--muted)}
+  #log{overflow-y:auto; padding:10px 14px; display:flex; flex-direction:column; gap:10px;
+    border-top:1px solid var(--line); min-height:0}
+  .msg{font-size:14px; word-break:break-word; display:flex; gap:8px; align-items:flex-start}
+  .msg .body{min-width:0}
+  .msg .nick{font-weight:600; font-size:13px}
+  .msg.sys{color:var(--muted); font-size:13px; font-style:italic; display:block}
+  form{display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+
+<!-- ================= ЭКРАН ВХОДА ================= -->
+<div id="lobby">
+  <div class="card">
+    <h1 class="logo">Вместе<span>.</span></h1>
+    <p class="sub">Комната, где можно смотреть что-то одновременно и разговаривать голосом. Без установки и без регистрации.</p>
+
+    <div class="profile-row">
+      <div>
+        <div class="av av-lg" id="av-preview" title="Нажмите, чтобы изменить"></div>
+        <div class="tap">изменить</div>
+      </div>
+      <div class="grow">
+        <div class="field" style="margin:0">
+          <label for="name">Как вас зовут</label>
+          <input id="name" maxlength="32" placeholder="Саид" autocomplete="off">
+        </div>
+      </div>
+    </div>
+
+    <div id="picker">
+      <div class="pick-title">Значок</div>
+      <div class="emoji-grid" id="emoji-grid"></div>
+      <div class="pick-title">Цвет</div>
+      <div class="color-row" id="color-row"></div>
+    </div>
+
+    <div class="field">
+      <label for="room-input">Название комнаты</label>
+      <input id="room-input" maxlength="64" placeholder="например: pyatnica" autocomplete="off">
+    </div>
+    <button class="primary" id="enter" style="width:100%">Войти в комнату</button>
+
+    <div class="rooms" id="recent" style="display:none">
+      <div class="pick-title">Вы недавно заходили</div>
+      <div class="chips" id="recent-chips"></div>
+    </div>
+
+    <p class="hint">
+      Профиль хранится только в вашем браузере. Мы не собираем ни почту, ни телефон.<br>
+      Видео и звук идут напрямую между участниками, минуя сервер.
+    </p>
+  </div>
+</div>
+
+<!-- ================= КОМНАТА ================= -->
+<div id="room">
+  <header>
+    <div class="av av-md" id="av-header"></div>
+    <div class="room-name">Вместе <small id="room-label"></small></div>
+    <button id="share">Показать экран</button>
+    <button id="mic">Выключить микрофон</button>
+    <button id="copy">Скопировать ссылку</button>
+    <div class="spacer"></div>
+    <div class="status" id="status"></div>
+    <button class="danger" id="leave">Выйти</button>
+  </header>
+
+  <main>
+    <div id="stage"></div>
+    <aside>
+      <div class="side-title">Участники</div>
+      <div id="people"></div>
+      <div id="log"></div>
+      <form id="chat-form">
+        <input id="chat-input" maxlength="500" placeholder="Написать в чат…" autocomplete="off">
+        <button type="submit">→</button>
+      </form>
+    </aside>
+  </main>
+</div>
+
+<script>
+'use strict';
+
+// ============ Настройки соединения ============
+// STUN помогает браузерам найти друг друга.
+// TURN нужен, когда прямое соединение не проходит (строгий NAT, мобильный интернет).
+// Ниже — бесплатный публичный TURN. Для боевого запуска поставьте свой coturn.
+const RTC_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    {
+      urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443'],
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    }
+  ]
+};
+
+// ============ Профиль ============
+// Хранится ТОЛЬКО в браузере пользователя (localStorage).
+// На сервер уходит лишь имя, значок и цвет — и то лишь на время сессии.
+const EMOJI = ['\u{1F642}','\u{1F60E}','\u{1F431}','\u{1F436}','\u{1F98A}','\u{1F43C}','\u{1F981}','\u{1F438}','\u{1F47E}','\u{1F3A7}','\u{1F355}','\u{1F319}','⚡','\u{1F335}','\u{1F3AE}','\u{1F525}'];
+const COLORS = ['#5b8cff','#3fb27f','#e0a35c','#e05c5c','#a97bff','#4fc3d9','#e07cb0','#7f8ea3'];
+const PROFILE_KEY = 'vmeste.profile';
+const ROOMS_KEY = 'vmeste.rooms';
+
+function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function loadProfile() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}');
+    return {
+      name: typeof p.name === 'string' ? p.name.slice(0, 32) : '',
+      emoji: EMOJI.indexOf(p.emoji) >= 0 ? p.emoji : pickRandom(EMOJI),
+      color: COLORS.indexOf(p.color) >= 0 ? p.color : pickRandom(COLORS)
+    };
+  } catch {
+    return { name: '', emoji: EMOJI[0], color: COLORS[0] };
+  }
+}
+function saveProfile() {
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch {}
+}
+function loadRooms() {
+  try {
+    const r = JSON.parse(localStorage.getItem(ROOMS_KEY) || '[]');
+    return Array.isArray(r) ? r.filter((x) => typeof x === 'string').slice(0, 6) : [];
+  } catch { return []; }
+}
+function rememberRoom(room) {
+  try {
+    const list = [room].concat(loadRooms().filter((r) => r !== room)).slice(0, 6);
+    localStorage.setItem(ROOMS_KEY, JSON.stringify(list));
+  } catch {}
+}
+
+const profile = loadProfile();
+
+// ============ Состояние ============
+let ws = null;
+let myId = null;
+let roomId = null;
+let micStream = null;     // мой микрофон
+let screenStream = null;  // мой экран (если показываю)
+const peers = new Map();       // peerId -> { pc, name, avatar, polite, ... }
+const pendingInfo = new Map(); // peerId -> { name, avatar } до установки соединения
+
+const $ = (id) => document.getElementById(id);
+const stage = $('stage'), logEl = $('log'), peopleEl = $('people');
+
+// ============ Утилиты ============
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
+}
+function setStatus(t) { $('status').textContent = t; }
+
+function avatarEl(avatar, size) {
+  const d = document.createElement('div');
+  d.className = 'av av-' + (size || 'sm');
+  d.style.background = (avatar && avatar.color) || COLORS[0];
+  d.textContent = (avatar && avatar.emoji) || EMOJI[0];
+  return d;
+}
+
+function logSys(text) {
+  const div = document.createElement('div');
+  div.className = 'msg sys';
+  div.textContent = text;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function logChat(name, avatar, text) {
+  const row = document.createElement('div');
+  row.className = 'msg';
+  row.appendChild(avatarEl(avatar, 'sm'));
+  const body = document.createElement('div');
+  body.className = 'body';
+  body.innerHTML = '<div class="nick">' + escapeHtml(name) + '</div>' + escapeHtml(text);
+  row.appendChild(body);
+  logEl.appendChild(row);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function renderPeople() {
+  peopleEl.innerHTML = '';
+  const track = micStream && micStream.getAudioTracks()[0];
+  const micOn = !!(track && track.enabled);
+  const rows = [{ name: profile.name + ' (вы)', avatar: profile, on: micOn }];
+  for (const p of peers.values()) rows.push({ name: p.name, avatar: p.avatar, on: true });
+
+  for (const r of rows) {
+    const d = document.createElement('div');
+    d.className = 'person';
+    d.appendChild(avatarEl(r.avatar, 'sm'));
+    const nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = r.name;
+    d.appendChild(nm);
+    const dot = document.createElement('span');
+    dot.className = 'dot' + (r.on ? '' : ' off');
+    d.appendChild(dot);
+    peopleEl.appendChild(d);
+  }
+}
+
+// ============ Видео-плитки ============
+function tileId(peerId) { return 'tile-' + peerId; }
+
+function showVideo(peerId, stream, label, avatar) {
+  let tile = document.getElementById(tileId(peerId));
+  if (!tile) {
+    tile = document.createElement('div');
+    tile.className = 'tile';
+    tile.id = tileId(peerId);
+    tile.innerHTML = '<video autoplay playsinline></video><div class="who"></div>';
+    stage.appendChild(tile);
+  }
+  const who = tile.querySelector('.who');
+  who.innerHTML = '';
+  who.appendChild(avatarEl(avatar, 'sm'));
+  who.appendChild(document.createTextNode(label));
+
+  const v = tile.querySelector('video');
+  if (v.srcObject !== stream) v.srcObject = stream;
+  if (peerId === 'me') v.muted = true; // не слушаем сами себя
+  v.play().catch(() => {});
+}
+
+function removeVideo(peerId) {
+  const el = document.getElementById(tileId(peerId));
+  if (el) el.remove();
+}
+
+function attachAudio(peerId, stream) {
+  const id = 'audio-' + peerId;
+  let a = document.getElementById(id);
+  if (!a) {
+    a = document.createElement('audio');
+    a.id = id;
+    a.autoplay = true;
+    document.body.appendChild(a);
+  }
+  a.srcObject = stream;
+  a.play().catch(() => {});
+}
+function detachAudio(peerId) {
+  const el = document.getElementById('audio-' + peerId);
+  if (el) el.remove();
+}
+
+// ============ WebRTC ============
+function sendSignal(to, data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'signal', to, data }));
+  }
+}
+
+function addLocalTracks(pc) {
+  if (micStream) for (const t of micStream.getTracks()) pc.addTrack(t, micStream);
+  if (screenStream) for (const t of screenStream.getTracks()) pc.addTrack(t, screenStream);
+}
+
+/**
+ * "Perfect negotiation" — стандартный паттерн, который переживает
+ * одновременные offer'ы с двух сторон и добавление экрана на лету.
+ * polite=true означает "уступаю при конфликте".
+ */
+function createPeer(peerId, name, avatar, polite) {
+  const pc = new RTCPeerConnection(RTC_CONFIG);
+  const state = {
+    pc,
+    name: name || 'Гость',
+    avatar: avatar || { emoji: EMOJI[0], color: COLORS[0] },
+    polite,
+    makingOffer: false, ignoreOffer: false, isSettingRemoteAnswerPending: false
+  };
+  peers.set(peerId, state);
+
+  addLocalTracks(pc);
+
+  pc.onnegotiationneeded = async () => {
+    try {
+      state.makingOffer = true;
+      await pc.setLocalDescription();
+      sendSignal(peerId, { description: pc.localDescription });
+    } catch (e) {
+      console.error('negotiation:', e);
+    } finally {
+      state.makingOffer = false;
+    }
+  };
+
+  pc.onicecandidate = ({ candidate }) => {
+    if (candidate) sendSignal(peerId, { candidate });
+  };
+
+  pc.ontrack = ({ track, streams }) => {
+    const stream = streams[0];
+    if (!stream) return;
+    if (track.kind === 'video') {
+      showVideo(peerId, stream, state.name + ' показывает экран', state.avatar);
+      const cleanup = () => removeVideo(peerId);
+      track.addEventListener('ended', cleanup);
+      track.addEventListener('mute', cleanup);
+      stream.addEventListener('removetrack', (e) => { if (e.track.kind === 'video') cleanup(); });
+    } else {
+      // аудио экрана приедет внутри того же stream, что и видео — его сыграет <video>
+      if (stream.getVideoTracks().length === 0) attachAudio(peerId, stream);
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+      logSys('Соединение с ' + state.name + ' потеряно.');
+    }
+  };
+
+  renderPeople();
+  return state;
+}
+
+async function handleSignal(peerId, data) {
+  let state = peers.get(peerId);
+  if (!state) {
+    const info = pendingInfo.get(peerId) || {};
+    state = createPeer(peerId, info.name, info.avatar, true); // отвечающая сторона — вежливая
+  }
+  const pc = state.pc;
+
+  try {
+    if (data.description) {
+      const readyForOffer =
+        !state.makingOffer &&
+        (pc.signalingState === 'stable' || state.isSettingRemoteAnswerPending);
+      const offerCollision = data.description.type === 'offer' && !readyForOffer;
+
+      state.ignoreOffer = !state.polite && offerCollision;
+      if (state.ignoreOffer) return;
+
+      state.isSettingRemoteAnswerPending = data.description.type === 'answer';
+      await pc.setRemoteDescription(data.description);
+      state.isSettingRemoteAnswerPending = false;
+
+      if (data.description.type === 'offer') {
+        await pc.setLocalDescription();
+        sendSignal(peerId, { description: pc.localDescription });
+      }
+    } else if (data.candidate) {
+      try {
+        await pc.addIceCandidate(data.candidate);
+      } catch (e) {
+        if (!state.ignoreOffer) throw e;
+      }
+    }
+  } catch (e) {
+    console.error('signal:', e);
+  }
+}
+
+function dropPeer(peerId) {
+  const state = peers.get(peerId);
+  if (!state) return;
+  state.pc.close();
+  peers.delete(peerId);
+  pendingInfo.delete(peerId);
+  removeVideo(peerId);
+  detachAudio(peerId);
+  logSys(state.name + ' вышел из комнаты.');
+  renderPeople();
+}
+
+// ============ Микрофон и экран ============
+async function initMic() {
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: false
+    });
+  } catch {
+    micStream = null;
+    logSys('Микрофон недоступен — вы в режиме «только слушать».');
+  }
+  renderPeople();
+}
+
+async function toggleShare() {
+  if (screenStream) return stopShare();
+
+  try {
+    screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: 30 },
+      audio: true // важно: даёт звук фильма, если браузер поддерживает
+    });
+  } catch {
+    return; // пользователь отменил
+  }
+
+  showVideo('me', screenStream, 'Вы показываете экран', profile);
+  for (const state of peers.values()) {
+    for (const t of screenStream.getTracks()) state.pc.addTrack(t, screenStream);
+  }
+  screenStream.getVideoTracks()[0].addEventListener('ended', stopShare);
+  $('share').textContent = 'Остановить показ';
+  $('share').classList.add('danger');
+  if (screenStream.getAudioTracks().length === 0) {
+    logSys('Звук экрана не захвачен. В Chrome при выборе вкладки включите «Поделиться звуком вкладки».');
+  }
+}
+
+function stopShare() {
+  if (!screenStream) return;
+  const ids = new Set(screenStream.getTracks().map((t) => t.id));
+  for (const state of peers.values()) {
+    for (const sender of state.pc.getSenders()) {
+      if (sender.track && ids.has(sender.track.id)) state.pc.removeTrack(sender);
+    }
+  }
+  for (const t of screenStream.getTracks()) t.stop();
+  screenStream = null;
+  removeVideo('me');
+  $('share').textContent = 'Показать экран';
+  $('share').classList.remove('danger');
+}
+
+function toggleMic() {
+  if (!micStream) return;
+  const track = micStream.getAudioTracks()[0];
+  if (!track) return;
+  track.enabled = !track.enabled;
+  $('mic').textContent = track.enabled ? 'Выключить микрофон' : 'Включить микрофон';
+  $('mic').classList.toggle('danger', !track.enabled);
+  renderPeople();
+}
+
+// ============ Подключение ============
+async function join(room) {
+  roomId = room;
+  rememberRoom(room);
+  saveProfile();
+
+  $('lobby').style.display = 'none';
+  $('room').classList.add('on');
+  $('room-label').textContent = '· ' + room;
+
+  const head = $('av-header');
+  head.style.background = profile.color;
+  head.textContent = profile.emoji;
+  head.title = profile.name;
+
+  history.replaceState(null, '', '/r/' + encodeURIComponent(room));
+
+  setStatus('Подключаюсь…');
+  await initMic();
+
+  const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+  ws = new WebSocket(proto + location.host);
+
+  ws.onopen = () => ws.send(JSON.stringify({
+    type: 'join',
+    room: room,
+    name: profile.name,
+    avatar: { emoji: profile.emoji, color: profile.color }
+  }));
+
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+
+    if (msg.type === 'joined') {
+      myId = msg.id;
+      setStatus('В сети');
+      logSys('Вы вошли в комнату «' + room + '».');
+      // Я новенький → я инициирую соединение с каждым, кто уже здесь (я невежливый)
+      for (const p of msg.peers) createPeer(p.id, p.name, p.avatar, false);
+      renderPeople();
+    }
+
+    else if (msg.type === 'peer-joined') {
+      // Соединение не создаём — новичок сам пришлёт offer. Пока запомним, кто это.
+      logSys(msg.name + ' присоединился.');
+      pendingInfo.set(msg.id, { name: msg.name, avatar: msg.avatar });
+      const existing = peers.get(msg.id);
+      if (existing) {
+        existing.name = msg.name;
+        existing.avatar = msg.avatar;
+        renderPeople();
+      }
+    }
+
+    else if (msg.type === 'signal') {
+      handleSignal(msg.from, msg.data).then(() => {
+        const st = peers.get(msg.from);
+        const info = pendingInfo.get(msg.from);
+        if (st && info && st.name !== info.name) {
+          st.name = info.name;
+          st.avatar = info.avatar;
+          renderPeople();
+        }
+      });
+    }
+
+    else if (msg.type === 'peer-left') dropPeer(msg.id);
+
+    else if (msg.type === 'chat') logChat(msg.name, msg.avatar, msg.text);
+
+    else if (msg.type === 'error') {
+      setStatus('Ошибка');
+      logSys(msg.message);
+    }
+  };
+
+  ws.onclose = () => setStatus('Соединение потеряно — обновите страницу');
+  ws.onerror = () => setStatus('Ошибка соединения');
+}
+
+function leave() {
+  stopShare();
+  if (micStream) for (const t of micStream.getTracks()) t.stop();
+  for (const id of [...peers.keys()]) dropPeer(id);
+  if (ws) ws.close();
+  location.href = '/';
+}
+
+// ============ Интерфейс входа ============
+function paintPreview() {
+  const av = $('av-preview');
+  av.style.background = profile.color;
+  av.textContent = profile.emoji;
+}
+
+function buildPicker() {
+  const eg = $('emoji-grid');
+  eg.innerHTML = '';
+  for (const e of EMOJI) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = e;
+    b.className = e === profile.emoji ? 'sel' : '';
+    b.onclick = () => {
+      profile.emoji = e;
+      saveProfile();
+      paintPreview();
+      buildPicker();
+    };
+    eg.appendChild(b);
+  }
+
+  const cr = $('color-row');
+  cr.innerHTML = '';
+  for (const c of COLORS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.style.background = c;
+    b.className = c === profile.color ? 'sel' : '';
+    b.onclick = () => {
+      profile.color = c;
+      saveProfile();
+      paintPreview();
+      buildPicker();
+    };
+    cr.appendChild(b);
+  }
+}
+
+function buildRecent() {
+  const rooms = loadRooms();
+  if (!rooms.length) return;
+  $('recent').style.display = 'block';
+  const box = $('recent-chips');
+  box.innerHTML = '';
+  for (const r of rooms) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = r;
+    b.onclick = () => {
+      $('room-input').value = r;
+      $('enter').click();
+    };
+    box.appendChild(b);
+  }
+}
+
+$('av-preview').onclick = () => $('picker').classList.toggle('on');
+
+$('name').value = profile.name;
+$('name').oninput = () => {
+  profile.name = $('name').value.trim();
+  saveProfile();
+};
+
+$('enter').onclick = () => {
+  profile.name = $('name').value.trim() || 'Гость';
+  const room = $('room-input').value.trim().toLowerCase().replace(/\s+/g, '-');
+  if (!room) return $('room-input').focus();
+  join(room);
+};
+$('name').onkeydown = $('room-input').onkeydown = (e) => {
+  if (e.key === 'Enter') $('enter').click();
+};
+
+$('share').onclick = toggleShare;
+$('mic').onclick = toggleMic;
+$('leave').onclick = leave;
+$('copy').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(location.href);
+    $('copy').textContent = 'Ссылка скопирована';
+    setTimeout(() => ($('copy').textContent = 'Скопировать ссылку'), 1500);
+  } catch {
+    prompt('Скопируйте ссылку вручную:', location.href);
+  }
+};
+
+$('chat-form').onsubmit = (e) => {
+  e.preventDefault();
+  const text = $('chat-input').value.trim();
+  if (!text) return;
+  if (ws) ws.send(JSON.stringify({ type: 'chat', text }));
+  logChat('Вы', profile, text);
+  $('chat-input').value = '';
+};
+
+// ============ Старт ============
+paintPreview();
+buildPicker();
+buildRecent();
+
+// Если открыли ссылку вида /r/название — подставим комнату
+const match = location.pathname.match(/^\/r\/(.+)$/);
+if (match) $('room-input').value = decodeURIComponent(match[1]);
+
+if (profile.name) $('room-input').focus();
+else $('name').focus();
+</script>
+</body>
+</html>

@@ -67,8 +67,14 @@
   .chips button{background:var(--panel-2); font-size:13px; padding:7px 12px; border-radius:20px}
 
   /* --- Комната --- */
-  #room{display:none; height:100%; grid-template-rows:auto 1fr}
+  #room{display:none; height:100%; grid-template-rows:auto auto 1fr}
   #room.on{display:grid}
+  #banner{display:none; background:#3a2a12; border-bottom:1px solid #6b4a1c;
+    color:#f2d9a8; padding:12px 16px; font-size:14px; line-height:1.5;
+    align-items:center; gap:14px}
+  #banner.on{display:flex}
+  #banner button{background:#f2d9a8; color:#2a1d08; font-weight:600; padding:7px 14px;
+    white-space:nowrap; flex:none}
   header{display:flex; align-items:center; gap:10px; padding:12px 16px;
     background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap}
   .room-name{font-weight:600}
@@ -97,6 +103,8 @@
   .person .nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .dot{width:7px; height:7px; border-radius:50%; background:var(--accent-2); flex:none; margin-left:auto}
   .dot.off{background:var(--muted)}
+  .dot.bad{background:var(--danger)}
+  .dot.wait{background:#e0a35c}
   #log{overflow-y:auto; padding:10px 14px; display:flex; flex-direction:column; gap:10px;
     border-top:1px solid var(--line); min-height:0}
   .msg{font-size:14px; word-break:break-word; display:flex; gap:8px; align-items:flex-start}
@@ -165,6 +173,8 @@
     <button class="danger" id="leave">Выйти</button>
   </header>
 
+  <div id="banner"></div>
+
   <main>
     <div id="stage"></div>
     <aside>
@@ -186,17 +196,38 @@
 // STUN помогает браузерам найти друг друга.
 // TURN нужен, когда прямое соединение не проходит (строгий NAT, мобильный интернет).
 // Ниже — бесплатный публичный TURN. Для боевого запуска поставьте свой coturn.
+// Google STUN у части провайдеров недоступен — держим запасные варианты.
 const RTC_CONFIG = {
   iceServers: [
+    { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun.nextcloud.com:443' },
     {
-      urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443'],
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp'
+      ],
       username: 'openrelayproject',
       credential: 'openrelayproject'
     }
-  ]
+  ],
+  iceCandidatePoolSize: 4
 };
+
+// Встроенные браузеры мессенджеров почти всегда режут микрофон и демонстрацию экрана.
+function detectInAppBrowser() {
+  const ua = navigator.userAgent || '';
+  if (/Instagram/i.test(ua)) return 'Instagram';
+  if (/FBAN|FBAV/i.test(ua)) return 'Facebook';
+  if (/Telegram/i.test(ua)) return 'Telegram';
+  if (/VKClient|VKAndroidApp/i.test(ua)) return 'VK';
+  if (/Line\//i.test(ua)) return 'LINE';
+  // Android WebView: есть "wv" или Version/x.x рядом с Chrome
+  if (/Android/i.test(ua) && /\bwv\b/i.test(ua)) return 'встроенный браузер';
+  return null;
+}
 
 // ============ Профиль ============
 // Хранится ТОЛЬКО в браузере пользователя (localStorage).
@@ -256,6 +287,24 @@ function escapeHtml(s) {
 }
 function setStatus(t) { $('status').textContent = t; }
 
+// Заметное предупреждение вверху комнаты — для того, что человек обязан прочитать.
+function banner(text, action) {
+  const box = $('banner');
+  box.innerHTML = '';
+  const span = document.createElement('span');
+  span.textContent = text;
+  box.appendChild(span);
+  if (action) {
+    const b = document.createElement('button');
+    b.textContent = action.label;
+    b.onclick = action.onClick;
+    box.appendChild(b);
+  }
+  box.classList.add('on');
+  logSys(text);
+}
+function hideBanner() { $('banner').classList.remove('on'); }
+
 function avatarEl(avatar, size) {
   const d = document.createElement('div');
   d.className = 'av av-' + (size || 'sm');
@@ -288,8 +337,11 @@ function renderPeople() {
   peopleEl.innerHTML = '';
   const track = micStream && micStream.getAudioTracks()[0];
   const micOn = !!(track && track.enabled);
-  const rows = [{ name: profile.name + ' (вы)', avatar: profile, on: micOn }];
-  for (const p of peers.values()) rows.push({ name: p.name, avatar: p.avatar, on: true });
+  const meLabel = profile.name + ' (вы)' + (micStream ? '' : ' · без микрофона');
+  const rows = [{ name: meLabel, avatar: profile, on: micOn, conn: 'connected' }];
+  for (const p of peers.values()) {
+    rows.push({ name: p.name, avatar: p.avatar, on: true, conn: p.conn || 'new' });
+  }
 
   for (const r of rows) {
     const d = document.createElement('div');
@@ -299,8 +351,18 @@ function renderPeople() {
     nm.className = 'nm';
     nm.textContent = r.name;
     d.appendChild(nm);
+
     const dot = document.createElement('span');
-    dot.className = 'dot' + (r.on ? '' : ' off');
+    if (r.conn === 'failed' || r.conn === 'disconnected') {
+      dot.className = 'dot bad';
+      dot.title = 'Связь не установилась';
+    } else if (r.conn === 'connected') {
+      dot.className = 'dot' + (r.on ? '' : ' off');
+      dot.title = r.on ? 'Микрофон включён' : 'Микрофон выключен';
+    } else {
+      dot.className = 'dot wait';
+      dot.title = 'Соединяемся…';
+    }
     d.appendChild(dot);
     peopleEl.appendChild(d);
   }
@@ -334,6 +396,8 @@ function removeVideo(peerId) {
   if (el) el.remove();
 }
 
+const blockedAudio = new Set(); // элементы, которым браузер запретил автозапуск
+
 function attachAudio(peerId, stream) {
   const id = 'audio-' + peerId;
   let a = document.getElementById(id);
@@ -341,10 +405,22 @@ function attachAudio(peerId, stream) {
     a = document.createElement('audio');
     a.id = id;
     a.autoplay = true;
+    a.playsInline = true;
     document.body.appendChild(a);
   }
   a.srcObject = stream;
-  a.play().catch(() => {});
+  a.play().catch(() => {
+    // Браузер блокирует звук до первого клика — предлагаем нажать кнопку.
+    blockedAudio.add(a);
+    banner('Браузер заблокировал звук до вашего первого нажатия.', {
+      label: 'Включить звук',
+      onClick: () => {
+        for (const el of blockedAudio) el.play().catch(() => {});
+        blockedAudio.clear();
+        hideBanner();
+      }
+    });
+  });
 }
 function detachAudio(peerId) {
   const el = document.getElementById('audio-' + peerId);
@@ -413,8 +489,14 @@ function createPeer(peerId, name, avatar, polite) {
   };
 
   pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-      logSys('Соединение с ' + state.name + ' потеряно.');
+    state.conn = pc.connectionState;
+    renderPeople();
+
+    if (pc.connectionState === 'failed') {
+      logSys('Не удалось установить прямое соединение с ' + state.name + '.');
+      banner('Связь с участником не устанавливается — скорее всего мешает сеть или провайдер. Помогает мобильный интернет вместо Wi-Fi, или наоборот.');
+      // одна попытка перезапустить подбор маршрута
+      try { pc.restartIce(); } catch {}
     }
   };
 
@@ -474,14 +556,39 @@ function dropPeer(peerId) {
 
 // ============ Микрофон и экран ============
 async function initMic() {
+  const inApp = detectInAppBrowser();
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    micStream = null;
+    banner(
+      inApp
+        ? 'Вы открыли сайт внутри ' + inApp + '. Такой браузер не пускает к микрофону. Нажмите «…» вверху и выберите «Открыть в браузере» — тогда всё заработает.'
+        : 'Этот браузер не умеет работать с микрофоном. Откройте сайт в Chrome или Safari.'
+    );
+    renderPeople();
+    return;
+  }
+
   try {
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       video: false
     });
-  } catch {
+  } catch (e) {
     micStream = null;
-    logSys('Микрофон недоступен — вы в режиме «только слушать».');
+    const name = e && e.name;
+
+    if (inApp) {
+      banner('Вы открыли сайт внутри ' + inApp + '. Такой браузер не даёт доступ к микрофону. Нажмите «…» вверху и выберите «Открыть в браузере».');
+    } else if (name === 'NotAllowedError' || name === 'SecurityError') {
+      banner('Браузер не пустил к микрофону. Нажмите на значок замка слева от адреса сайта → «Микрофон» → «Разрешить», потом обновите страницу.');
+    } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+      banner('Микрофон не найден. Проверьте, подключены ли наушники или микрофон.');
+    } else if (name === 'NotReadableError') {
+      banner('Микрофон занят другой программой — закройте Zoom, Discord или Skype и обновите страницу.');
+    } else {
+      banner('Не удалось включить микрофон (' + (name || 'неизвестная ошибка') + '). Вы можете слушать, но вас не услышат.');
+    }
   }
   renderPeople();
 }
@@ -726,6 +833,22 @@ $('chat-form').onsubmit = (e) => {
 paintPreview();
 buildPicker();
 buildRecent();
+
+// Предупреждаем ДО входа, а не после — так человек не потратит вечер впустую.
+(function warnInApp() {
+  const inApp = detectInAppBrowser();
+  if (!inApp) return;
+  const box = document.createElement('div');
+  box.style.cssText =
+    'background:#3a2a12;border:1px solid #6b4a1c;color:#f2d9a8;' +
+    'padding:14px;border-radius:12px;font-size:13.5px;line-height:1.55;margin-bottom:18px';
+  box.innerHTML =
+    '<b>Откройте эту страницу в обычном браузере.</b><br>' +
+    'Сейчас вы внутри ' + escapeHtml(inApp) + ', а он не даёт сайтам доступ к микрофону. ' +
+    'Нажмите «…» или «⋮» вверху экрана и выберите «Открыть в браузере» — иначе вас не будет слышно.';
+  const card = document.querySelector('.card');
+  card.insertBefore(box, card.querySelector('.profile-row'));
+})();
 
 // Если открыли ссылку вида /r/название — подставим комнату
 const match = location.pathname.match(/^\/r\/(.+)$/);

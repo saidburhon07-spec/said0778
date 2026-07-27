@@ -475,7 +475,8 @@ function createPeer(peerId, name, avatar, polite) {
     name: name || 'Гость',
     avatar: avatar || { emoji: EMOJI[0], color: COLORS[0] },
     polite,
-    makingOffer: false, ignoreOffer: false, isSettingRemoteAnswerPending: false
+    makingOffer: false, ignoreOffer: false, isSettingRemoteAnswerPending: false,
+    failTimer: null, warned: false
   };
   peers.set(peerId, state);
 
@@ -522,11 +523,26 @@ function createPeer(peerId, name, avatar, polite) {
     state.conn = pc.connectionState;
     renderPeople();
 
+    if (pc.connectionState === 'connected') {
+      clearTimeout(state.failTimer);
+      state.failTimer = null;
+      state.warned = false;
+      hideBanner();
+      return;
+    }
+
+    // Обрыв часто лечится сам за пару секунд. Не пугаем человека сразу:
+    // сначала молча пробуем переподключиться, жалуемся только если не вышло.
     if (pc.connectionState === 'failed') {
-      logSys('Не удалось установить прямое соединение с ' + state.name + '.');
-      banner('Связь с участником не устанавливается — скорее всего мешает сеть или провайдер. Помогает мобильный интернет вместо Wi-Fi, или наоборот.');
-      // одна попытка перезапустить подбор маршрута
       try { pc.restartIce(); } catch {}
+      if (state.failTimer || state.warned) return;
+      state.failTimer = setTimeout(() => {
+        state.failTimer = null;
+        if (state.pc.connectionState === 'connected') return;
+        state.warned = true;
+        logSys('Не удалось установить прямое соединение с ' + state.name + '.');
+        banner('Связь с участником не устанавливается — скорее всего мешает сеть или провайдер. Помогает мобильный интернет вместо Wi-Fi, или наоборот.');
+      }, 12000);
     }
   };
 
@@ -576,6 +592,7 @@ function dropPeer(peerId) {
   const info = roster.get(peerId);
   const state = peers.get(peerId);
   if (state) {
+    clearTimeout(state.failTimer);
     state.pc.close();
     peers.delete(peerId);
   }

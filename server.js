@@ -36,6 +36,8 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
+  '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
 // ---------- HTTP: отдаём статику ----------
@@ -90,7 +92,14 @@ function cleanAvatar(a) {
   if (!a || typeof a !== 'object') return DEFAULT_AVATAR;
   const emoji = typeof a.emoji === 'string' ? [...a.emoji].slice(0, 2).join('') : '';
   const color = typeof a.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(a.color) ? a.color : DEFAULT_AVATAR.color;
-  return { emoji: emoji || DEFAULT_AVATAR.emoji, color };
+  const out = { emoji: emoji || DEFAULT_AVATAR.emoji, color };
+
+  // Фотография профиля. Живёт только в памяти, пока человек в комнате,
+  // на диск не пишется. Ограничиваем размер, чтобы никто не завалил сервер.
+  if (typeof a.img === 'string' && /^data:image\/(png|jpeg|webp);base64,/.test(a.img) && a.img.length <= 40000) {
+    out.img = a.img;
+  }
+  return out;
 }
 
 function broadcast(roomId, obj, exceptId) {
@@ -158,6 +167,17 @@ wss.on('connection', (ws) => {
     if (msg.type === 'signal') {
       const target = room.get(msg.to);
       if (target) send(target.ws, { type: 'signal', from: peerId, data: msg.data });
+      return;
+    }
+
+    // Синхронный просмотр: пауза, запуск и перемотка у всех одновременно.
+    // Сам фильм через сервер НЕ идёт — только команды плееру.
+    if (msg.type === 'sync') {
+      const action = ['play', 'pause', 'seek', 'ready'].includes(msg.action) ? msg.action : null;
+      if (!action) return;
+      const time = Number.isFinite(msg.time) ? Math.max(0, Math.min(msg.time, 86400)) : 0;
+      const title = typeof msg.title === 'string' ? msg.title.slice(0, 120) : '';
+      broadcast(roomId, { type: 'sync', from: peerId, name, action, time, title }, peerId);
       return;
     }
 

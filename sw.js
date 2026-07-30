@@ -3,7 +3,7 @@
    понятную страницу, если интернет пропал. Кэш держим коротким,
    чтобы после обновления люди не сидели на старой версии. */
 
-const CACHE = 'vmeste-v5';
+const CACHE = 'vmeste-v6';
 const ASSETS = ['/icon-192.png', '/icon-512.png', '/manifest.json'];
 
 self.addEventListener('install', (e) => {
@@ -30,7 +30,7 @@ self.addEventListener('fetch', (e) => {
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req).catch(() => new Response(
-        '<!doctype html><meta charset="utf-8"><style>body{background:#f6f5f2;color:#14130f;' +
+        '<!doctype html><meta charset="utf-8"><style>body{background:#08090b;color:#f2ede6;' +
         'font:16px system-ui;display:grid;place-items:center;height:100vh;margin:0;text-align:center;padding:24px}' +
         '</style><div><h2>Нет интернета</h2><p>Проверьте соединение и обновите страницу.</p></div>',
         { headers: { 'Content-Type': 'text/html; charset=utf-8' } }

@@ -5,113 +5,103 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Вместе — смотрим вместе</title>
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#f6f5f2">
+<meta name="theme-color" content="#08090b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Вместе">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <style>
   :root{
-    --bg:#f6f5f2; --card:#ffffff; --soft:#efeee9; --soft-2:#e7e5df;
-    --line:rgba(20,18,12,.08); --line-2:rgba(20,18,12,.14);
-    --text:#14130f; --muted:#6d6a62; --dim:#9a968c;
-    --ink:#101010; --accent:#5b5bd6; --accent-soft:#ececfb;
-    --ok:#2c9c6a; --danger:#d1483a;
-    --sh-1:0 1px 2px rgba(20,18,12,.05);
-    --sh-2:0 2px 6px rgba(20,18,12,.05), 0 12px 34px rgba(20,18,12,.07);
-    --sh-3:0 10px 30px rgba(20,18,12,.10), 0 40px 80px rgba(20,18,12,.10);
-    --r:16px; --r-lg:24px;
+    --bg:#08090b; --panel:#101217; --panel-2:#171a20; --panel-3:#1e222a;
+    --line:#23262e; --line-2:#2e323c;
+    --text:#f2ede6; --muted:#8a847c; --dim:#5f5a54;
+    --amber:#d99a4e; --amber-hi:#eab472; --amber-dim:#8a6231;
+    --ok:#6fbf8b; --danger:#c9553d;
+    --shadow:0 24px 60px rgba(0,0,0,.6);
   }
-  html.cinema{
-    --bg:#0b0b0d; --card:#141417; --soft:#1a1a1e; --soft-2:#222227;
-    --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.16);
-    --text:#f3f1ec; --muted:#9b978f; --dim:#6b6862;
-    --ink:#f3f1ec; --accent:#8b8bf0; --accent-soft:#232336;
-    --sh-1:none; --sh-2:0 20px 50px rgba(0,0,0,.5); --sh-3:0 30px 70px rgba(0,0,0,.6);
+  html.day{
+    --bg:#f7f4ef; --panel:#fffdfa; --panel-2:#f0ece4; --panel-3:#e6e1d7;
+    --line:#e2ddd2; --line-2:#d2ccbf;
+    --text:#1a1713; --muted:#6d665c; --dim:#948c80;
+    --amber:#a86f23; --amber-hi:#8a5a18; --amber-dim:#d9c39c;
+    --ok:#2f7d51; --danger:#a83c28;
+    --shadow:0 18px 44px rgba(60,45,25,.14);
   }
   *{box-sizing:border-box}
   html,body{height:100%}
   body{margin:0; background:var(--bg); color:var(--text); overflow-x:hidden;
-    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif;
-    -webkit-font-smoothing:antialiased; -webkit-tap-highlight-color:transparent}
-  h1,h2,h3{font-weight:600; letter-spacing:-.03em; margin:0}
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    -webkit-tap-highlight-color:transparent}
+  .serif{font-family:"Iowan Old Style",Georgia,"Times New Roman",serif}
 
-  /* пастельное небо, как на референсе — чистый CSS, без картинок */
-  .sky{position:fixed; inset:0 0 auto 0; height:56vh; pointer-events:none; z-index:0;
-    background:
-      radial-gradient(60% 42% at 12% 6%, rgba(255,228,203,.85), transparent 62%),
-      radial-gradient(52% 40% at 84% 10%, rgba(226,232,255,.9), transparent 64%),
-      radial-gradient(70% 52% at 50% -8%, rgba(150,190,240,.55), transparent 66%),
-      radial-gradient(40% 30% at 70% 30%, rgba(255,238,225,.7), transparent 70%),
-      linear-gradient(180deg, rgba(180,210,245,.5) 0%, rgba(246,245,242,0) 78%);
-    filter:saturate(1.05)}
-  html.cinema .sky{opacity:.14; filter:saturate(.7)}
-
-  button{font:inherit; cursor:pointer; border:1px solid var(--line-2); border-radius:999px;
-    padding:10px 18px; background:var(--card); color:var(--text); box-shadow:var(--sh-1);
-    transition:background .16s, color .16s, border-color .16s, transform .08s, box-shadow .16s}
-  button:hover:not(:disabled){border-color:var(--line-2); box-shadow:var(--sh-2); transform:translateY(-1px)}
-  button:active:not(:disabled){transform:translateY(0) scale(.985)}
+  button{font:inherit; cursor:pointer; border:1px solid var(--line-2); border-radius:11px;
+    padding:10px 15px; background:transparent; color:var(--text);
+    transition:background .16s, border-color .16s, transform .08s, color .16s}
+  button:hover:not(:disabled){background:var(--panel-2); border-color:var(--amber-dim)}
+  button:active:not(:disabled){transform:scale(.975)}
   button:disabled{opacity:.4; cursor:not-allowed}
-  .primary{background:var(--ink); border-color:var(--ink); color:var(--bg); font-weight:500}
-  .primary:hover:not(:disabled){background:var(--ink); opacity:.9}
-  .danger{color:var(--danger); border-color:transparent; background:transparent; box-shadow:none}
+  .primary{background:var(--amber); border-color:var(--amber); color:#12100c; font-weight:600}
+  .primary:hover:not(:disabled){background:var(--amber-hi); border-color:var(--amber-hi); color:#12100c}
+  .danger{color:var(--danger); border-color:transparent}
   .danger:hover:not(:disabled){background:var(--danger); border-color:var(--danger); color:#fff}
-  .ghost{border-color:transparent; background:transparent; box-shadow:none; color:var(--muted);
-    padding:8px 12px; font-size:13px}
-  .ghost:hover{color:var(--text); background:var(--soft)}
+  .ghost{border-color:transparent; color:var(--muted); padding:7px 11px; font-size:13px}
+  .ghost:hover{color:var(--text)}
 
-  input[type=text]{font:inherit; background:var(--soft); color:var(--text);
-    border:1px solid transparent; border-radius:14px; padding:13px 16px; width:100%}
-  input[type=text]:focus{outline:none; background:var(--card); border-color:var(--line-2); box-shadow:var(--sh-1)}
+  input[type=text]{font:inherit; background:var(--panel-2); color:var(--text);
+    border:1px solid var(--line); border-radius:11px; padding:12px 14px; width:100%}
+  input[type=text]:focus{outline:none; border-color:var(--amber); background:var(--panel-3)}
   input[type=text]::placeholder{color:var(--dim)}
-  input[type=range]{width:100%; accent-color:var(--accent); cursor:pointer}
+  input[type=range]{width:100%; accent-color:var(--amber); cursor:pointer}
 
   .av{border-radius:50%; display:grid; place-items:center; flex:none; line-height:1;
-    user-select:none; overflow:hidden; background-size:cover; background-position:center;
-    transition:box-shadow .14s; color:#fff; font-weight:500}
+      user-select:none; overflow:hidden; background-size:cover; background-position:center;
+      transition:box-shadow .14s; color:#12100c; font-weight:600}
   .av-sm{width:30px; height:30px; font-size:15px}
-  .av-md{width:34px; height:34px; font-size:17px}
-  .av-lg{width:96px; height:96px; font-size:46px; cursor:pointer; box-shadow:var(--sh-2)}
-  .av-lg:hover{box-shadow:0 0 0 3px var(--accent-soft), var(--sh-2)}
-  .av.talking{box-shadow:0 0 0 3px var(--ok)}
+  .av-md{width:36px; height:36px; font-size:18px}
+  .av-lg{width:92px; height:92px; font-size:44px; cursor:pointer;
+    box-shadow:0 0 0 1px var(--line-2)}
+  .av-lg:hover{box-shadow:0 0 0 2px var(--amber)}
+  .av.talking{box-shadow:0 0 0 2px var(--ok), 0 0 14px rgba(111,191,139,.35)}
 
-  /* ---------- Вход ---------- */
-  #lobby{position:relative; z-index:1; min-height:100%; display:grid; place-items:center; padding:40px 20px}
-  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg);
-    padding:36px; width:100%; max-width:520px; box-shadow:var(--sh-3);
-    animation:rise .45s cubic-bezier(.2,.75,.3,1) both}
-  @keyframes rise{from{opacity:0; transform:translateY(16px)} to{opacity:1; transform:none}}
-  .brand{font-size:15px; font-weight:600; letter-spacing:-.02em; margin-bottom:22px; opacity:.55}
-  .h-big{font-size:40px; line-height:1.06; letter-spacing:-.04em; margin:0 0 12px}
-  .sub{color:var(--muted); margin:0 0 30px; font-size:15px; max-width:40ch}
-  .field{margin-bottom:16px}
-  .field label{display:block; font-size:12px; color:var(--dim); margin-bottom:8px;
-    letter-spacing:.02em}
-  .hint{font-size:12.5px; color:var(--dim); margin-top:22px; line-height:1.65}
-  .profile-row{display:flex; align-items:center; gap:20px; margin-bottom:22px}
+  #lobby{min-height:100%; display:grid; place-items:center; padding:28px 20px;
+    background:radial-gradient(ellipse 80% 60% at 50% 0%, rgba(217,154,78,.07), transparent 70%)}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:22px;
+    padding:32px; width:100%; max-width:470px; box-shadow:var(--shadow);
+    animation:rise .4s cubic-bezier(.2,.7,.3,1) both}
+  @keyframes rise{from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none}}
+  .logo{font-size:40px; font-weight:400; letter-spacing:-1px; margin:0 0 4px; line-height:1.1}
+  .logo span{color:var(--amber)}
+  .sub{color:var(--muted); margin:0 0 26px; font-size:14px; max-width:36ch}
+  .field{margin-bottom:15px}
+  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:7px;
+    text-transform:uppercase; letter-spacing:.8px}
+  .hint{font-size:12.5px; color:var(--dim); margin-top:20px; line-height:1.6}
+  .profile-row{display:flex; align-items:center; gap:18px; margin-bottom:18px}
   .profile-row .grow{flex:1; min-width:0}
-  .tap{font-size:11.5px; color:var(--dim); text-align:center; margin-top:9px}
+  .tap{font-size:11.5px; color:var(--muted); text-align:center; margin-top:8px;
+    text-transform:uppercase; letter-spacing:.7px}
 
-  #picker{display:none; background:var(--soft); border-radius:20px; padding:18px; margin-bottom:18px}
+  #picker{display:none; background:var(--panel-2); border:1px solid var(--line);
+    border-radius:16px; padding:16px; margin-bottom:16px}
   #picker.on{display:block}
-  .pick-title{font-size:11.5px; color:var(--dim); margin-bottom:11px; letter-spacing:.02em}
-  .emoji-grid{display:grid; grid-template-columns:repeat(8,1fr); gap:7px; margin-bottom:18px}
-  .emoji-grid button{padding:0; height:40px; font-size:19px; border-radius:12px; box-shadow:none}
-  .emoji-grid button.sel{border-color:var(--ink); background:var(--ink); color:var(--bg)}
-  .color-row{display:flex; gap:9px; flex-wrap:wrap; margin-bottom:18px}
-  .color-row button{width:32px; height:32px; padding:0; border:none; box-shadow:none}
-  .color-row button.sel{box-shadow:0 0 0 2px var(--card), 0 0 0 4px var(--ink)}
+  .pick-title{font-size:11.5px; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.9px; margin-bottom:11px}
+  .emoji-grid{display:grid; grid-template-columns:repeat(8,1fr); gap:7px; margin-bottom:16px}
+  .emoji-grid button{padding:0; height:38px; font-size:19px; background:var(--panel);
+    border-color:var(--line); border-radius:10px}
+  .emoji-grid button.sel{border-color:var(--amber); background:var(--panel-3)}
+  .color-row{display:flex; gap:9px; flex-wrap:wrap; margin-bottom:16px}
+  .color-row button{width:32px; height:32px; padding:0; border-radius:50%; border:none}
+  .color-row button.sel{box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--amber)}
   .photo-row{display:flex; gap:9px; flex-wrap:wrap}
-  .photo-row button{font-size:13px; padding:9px 15px; box-shadow:none}
+  .photo-row button{font-size:13px; padding:9px 13px; background:var(--panel); border-color:var(--line)}
 
-  .chips{display:flex; gap:9px; flex-wrap:wrap}
-  .chips button{background:var(--soft); border-color:transparent; font-size:13px;
-    padding:9px 16px; box-shadow:none}
-  .friend-chip{display:flex; align-items:center; gap:9px; background:var(--soft);
-    border-radius:999px; padding:5px 15px 5px 5px; font-size:13px}
+  .chips{display:flex; gap:8px; flex-wrap:wrap}
+  .chips button{background:var(--panel-2); border-color:var(--line); font-size:13px;
+    padding:8px 14px; border-radius:22px}
+  .friend-chip{display:flex; align-items:center; gap:8px; background:var(--panel-2);
+    border:1px solid var(--line); border-radius:22px; padding:5px 13px 5px 5px; font-size:13px}
 
-  /* ---------- Комната ---------- */
-  #room{display:none; position:relative; z-index:1; height:100vh; height:100dvh;
+  #room{display:none; height:100vh; height:100dvh;
     grid-template-rows:auto auto minmax(0,1fr)}
   #room.on{display:grid}
   /* Строки закреплены явно: баннер бывает скрыт, и без этого
@@ -119,116 +109,108 @@
   #room > header{grid-row:1}
   #room > #banner{grid-row:2}
   #room > main{grid-row:3}
-  header{display:flex; align-items:center; gap:10px; padding:14px 18px; flex-wrap:wrap}
-  .navpill{display:flex; align-items:center; gap:8px; background:var(--card);
-    border:1px solid var(--line); border-radius:999px; padding:7px; box-shadow:var(--sh-2)}
-  .navpill button{border:none; box-shadow:none; background:transparent; padding:9px 15px;
-    font-size:14px; color:var(--muted)}
-  .navpill button:hover{background:var(--soft); color:var(--text); transform:none; box-shadow:none}
-  .navpill button.act{background:var(--ink); color:var(--bg)}
-  .room-name{font-size:16px; font-weight:600; letter-spacing:-.02em; padding-left:6px}
-  .room-name small{color:var(--dim); font-weight:400; font-size:13px}
+  header{display:flex; align-items:center; gap:9px; padding:12px 16px; background:var(--panel);
+    border-bottom:1px solid var(--line); flex-wrap:wrap}
+  header button{padding:9px 13px; font-size:13.5px}
+  .room-name{font-size:17px; margin-right:6px}
+  .room-name small{color:var(--muted); font-size:13px; font-family:inherit}
   .spacer{flex:1}
-  .status{font-size:12.5px; color:var(--dim)}
+  .status{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px}
 
-  #banner{display:none; margin:0 18px; background:var(--accent-soft); color:var(--accent);
-    border-radius:16px; padding:14px 18px; font-size:14px; line-height:1.55;
+  #banner{display:none; background:#2b1f0f; border-bottom:1px solid var(--amber-dim);
+    color:#f0d5a8; padding:13px 16px; font-size:14px; line-height:1.55;
     align-items:center; gap:14px}
+  html.day #banner{background:#fbf0dc; color:#6b4a17}
   #banner.on{display:flex}
-  #banner button{background:var(--accent); border-color:var(--accent); color:#fff;
-    padding:8px 16px; white-space:nowrap; flex:none; box-shadow:none}
+  #banner button{background:var(--amber); border-color:var(--amber); color:#12100c;
+    font-weight:600; padding:7px 14px; white-space:nowrap; flex:none}
 
-  main{display:grid; grid-template-columns:minmax(0,1fr) 330px;
-    grid-template-rows:minmax(0,1fr); gap:16px; padding:8px 18px 18px;
-    min-height:0; height:100%}
-  @media (max-width:900px){ main{grid-template-columns:minmax(0,1fr);
+  main{display:grid; grid-template-columns:minmax(0,1fr) 310px;
+    grid-template-rows:minmax(0,1fr); min-height:0; height:100%}
+  @media (max-width:880px){ main{grid-template-columns:minmax(0,1fr);
     grid-template-rows:minmax(0,1fr) auto} }
 
-  #stage{overflow:auto; display:grid; gap:14px; align-content:start; min-height:0;
-    grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
-  #stage:empty{background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg);
-    box-shadow:var(--sh-2); display:grid; place-items:center}
-  #stage:empty::after{content:"Нажмите «Открыть фильм» — и начнём.";
-    color:var(--dim); font-size:16px; letter-spacing:-.01em}
-  .tile{background:#0b0b0d; border-radius:var(--r-lg); overflow:hidden; position:relative;
-    box-shadow:var(--sh-2); animation:rise .3s ease both}
-  .tile video{width:100%; display:block; aspect-ratio:16/9; object-fit:contain; background:#0b0b0d}
+  #stage{padding:16px; overflow:auto; display:grid; gap:14px; min-height:0;
+    grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); align-content:start;
+    background:radial-gradient(ellipse 70% 55% at 50% 42%, rgba(217,154,78,.05), transparent 72%)}
+  #stage:empty::after{content:"Тёмный зал. Нажмите «Открыть фильм» — и начнём.";
+    color:var(--dim); font-size:15px; grid-column:1/-1; text-align:center; padding:80px 20px;
+    font-family:"Iowan Old Style",Georgia,serif; font-style:italic}
+  .tile{background:#000; border:1px solid var(--line); border-radius:16px; overflow:hidden;
+    position:relative; animation:rise .3s ease both}
+  .tile video{width:100%; display:block; aspect-ratio:16/9; object-fit:contain; background:#000}
   .tile.wide{grid-column:1/-1}
-  .tile .who{position:absolute; left:14px; top:14px; background:rgba(255,255,255,.92);
-    padding:5px 13px 5px 5px; border-radius:999px; font-size:12.5px; color:#14130f;
-    display:flex; align-items:center; gap:8px; pointer-events:none; box-shadow:var(--sh-1)}
-  .tile .fs{position:absolute; right:14px; top:14px; background:rgba(255,255,255,.92);
-    color:#14130f; border:none; padding:8px 15px; font-size:13px; line-height:1; z-index:5;
-    box-shadow:var(--sh-1)}
+  .tile .who{position:absolute; left:12px; top:12px; background:rgba(8,9,11,.78);
+    border:1px solid rgba(217,154,78,.28); padding:5px 12px 5px 5px; border-radius:22px;
+    font-size:12.5px; color:#f2ede6; display:flex; align-items:center; gap:8px; pointer-events:none}
+  .tile .fs{position:absolute; right:12px; top:12px; background:rgba(8,9,11,.78);
+    border:1px solid rgba(217,154,78,.28); color:#f2ede6; padding:8px 13px;
+    border-radius:11px; font-size:13px; line-height:1; z-index:5}
   .tile:fullscreen{border-radius:0; display:grid; place-items:center; background:#000}
   .tile:fullscreen video{height:100vh; width:100vw; aspect-ratio:auto}
-  .tile:fullscreen .fs{right:22px; top:22px; padding:11px 19px; font-size:15px}
+  .tile:fullscreen .fs{right:20px; top:20px; padding:11px 17px; font-size:15px}
 
-  aside{background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg);
-    box-shadow:var(--sh-2); display:grid; grid-template-rows:auto auto 1fr auto;
-    min-height:0; height:100%; overflow:hidden}
-  @media (max-width:900px){ aside{height:auto; max-height:48vh} }
-  .side-title{padding:18px 20px 10px; font-size:12px; color:var(--dim); letter-spacing:.02em}
-  #people{padding:0 20px 14px; display:flex; flex-direction:column; gap:12px;
-    max-height:34vh; overflow-y:auto}
-  .person{display:flex; align-items:center; gap:11px; font-size:14.5px}
+  aside{background:var(--panel); border-left:1px solid var(--line);
+    display:grid; grid-template-rows:auto auto 1fr auto; min-height:0; height:100%}
+  @media (max-width:880px){ aside{height:auto; max-height:50vh; border-left:none;
+    border-top:1px solid var(--line)} }
+  .side-title{padding:14px 16px 8px; font-size:11.5px; letter-spacing:1px;
+    text-transform:uppercase; color:var(--muted)}
+  #people{padding:0 16px 12px; display:flex; flex-direction:column; gap:11px;
+    max-height:36vh; overflow-y:auto}
+  .person{display:flex; align-items:center; gap:10px; font-size:14px}
   .person .nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1}
-  .dot{width:7px; height:7px; border-radius:50%; background:var(--ok); flex:none}
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--ok); flex:none}
   .dot.off{background:var(--dim)}
   .dot.bad{background:var(--danger)}
-  .dot.wait{background:#e0a35c}
-  .vol{display:flex; align-items:center; gap:10px; padding-left:41px; margin-top:-6px}
+  .dot.wait{background:var(--amber)}
+  .vol{display:flex; align-items:center; gap:9px; padding-left:40px; margin-top:-5px}
   .vol input{flex:1}
   .vol span{font-size:11px; color:var(--dim); width:36px; text-align:right}
 
-  #log{overflow-y:auto; padding:14px 20px; display:flex; flex-direction:column; gap:13px;
+  #log{overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:12px;
     border-top:1px solid var(--line); min-height:140px}
   #log:empty::after{content:"Здесь появятся сообщения."; color:var(--dim); font-size:13px}
-  .msg{font-size:14.5px; word-break:break-word; display:flex; gap:10px; align-items:flex-start;
+  .msg{font-size:14px; word-break:break-word; display:flex; gap:9px; align-items:flex-start;
     animation:rise .2s ease both}
-  .msg .nick{font-weight:500; font-size:13px; color:var(--muted)}
-  .msg.sys{color:var(--dim); font-size:12.5px; display:block}
-  form{display:flex; gap:9px; padding:14px 20px; border-top:1px solid var(--line)}
-  form button{padding:12px 17px}
+  .msg .nick{font-weight:600; font-size:13px; color:var(--amber)}
+  .msg.sys{color:var(--dim); font-size:12.5px; font-style:italic; display:block}
+  form{display:flex; gap:9px; padding:12px 16px; border-top:1px solid var(--line)}
 
-  .pop{display:none; position:fixed; right:20px; top:78px; width:320px; z-index:40;
-    background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg);
-    padding:22px; box-shadow:var(--sh-3); animation:rise .2s ease both}
+  .pop{display:none; position:fixed; right:16px; top:68px; width:300px; z-index:40;
+    background:var(--panel); border:1px solid var(--line-2); border-radius:18px;
+    padding:18px; box-shadow:var(--shadow); animation:rise .2s ease both}
   .pop.on{display:block}
-  .pop h3{margin:0 0 18px; font-size:19px}
-  .set-row{margin-bottom:20px}
-  .set-row label{display:flex; justify-content:space-between; font-size:12.5px;
-    color:var(--muted); margin-bottom:9px}
-  .switch{display:flex; align-items:center; justify-content:space-between; font-size:14.5px}
+  .pop h3{margin:0 0 16px; font-size:16px; font-weight:400}
+  .set-row{margin-bottom:18px}
+  .set-row label{display:flex; justify-content:space-between; font-size:12px;
+    color:var(--muted); margin-bottom:7px; text-transform:uppercase; letter-spacing:.7px}
+  .switch{display:flex; align-items:center; justify-content:space-between; font-size:14px}
 
-  #crop{display:none; position:fixed; inset:0; z-index:90; background:rgba(20,18,12,.45);
-    backdrop-filter:blur(6px); place-items:center; padding:20px}
+  #crop{display:none; position:fixed; inset:0; z-index:90; background:rgba(4,5,7,.86);
+    place-items:center; padding:20px}
   #crop.on{display:grid}
-  .crop-box{background:var(--card); border-radius:var(--r-lg); padding:26px;
-    width:100%; max-width:360px; box-shadow:var(--sh-3)}
-  .crop-box h3{margin:0 0 6px; font-size:22px}
-  .crop-box p{margin:0 0 18px; font-size:13.5px; color:var(--muted)}
-  #crop-view{position:relative; width:100%; aspect-ratio:1; border-radius:20px;
-    overflow:hidden; background:var(--soft-2); touch-action:none; cursor:grab}
+  .crop-box{background:var(--panel); border:1px solid var(--line-2); border-radius:22px;
+    padding:22px; width:100%; max-width:340px; box-shadow:var(--shadow)}
+  .crop-box h3{margin:0 0 4px; font-size:19px; font-weight:400}
+  .crop-box p{margin:0 0 16px; font-size:13px; color:var(--muted)}
+  #crop-view{position:relative; width:100%; aspect-ratio:1; border-radius:14px;
+    overflow:hidden; background:#000; touch-action:none; cursor:grab}
   #crop-view.drag{cursor:grabbing}
   #crop-img{position:absolute; transform-origin:0 0; user-select:none;
     -webkit-user-drag:none; pointer-events:none}
   #crop-mask{position:absolute; inset:0; pointer-events:none;
-    box-shadow:0 0 0 9999px rgba(255,255,255,.62) inset; border-radius:50%}
-  html.cinema #crop-mask{box-shadow:0 0 0 9999px rgba(11,11,13,.7) inset}
-  .crop-actions{display:flex; gap:11px; margin-top:18px}
+    box-shadow:0 0 0 9999px rgba(8,9,11,.62) inset; border-radius:50%}
+  .crop-actions{display:flex; gap:10px; margin-top:16px}
   .crop-actions button{flex:1}
 </style>
 </head>
 <body>
-<div class="sky"></div>
 
-<!-- ================= ВХОД ================= -->
 <div id="lobby">
   <div class="card">
-    <div class="brand">Вместе</div>
-    <h1 class="h-big">Смотрите фильм<br>одновременно.</h1>
-    <p class="sub">Общая комната, синхронная пауза и голос рядом. Без установки и без регистрации.</p>
+    <h1 class="logo serif">Вместе<span>.</span></h1>
+    <p class="sub">Тёмный зал на двоих или на восьмерых. Смотрите фильм одновременно и разговаривайте голосом.</p>
 
     <div class="profile-row">
       <div>
@@ -250,7 +232,7 @@
         <button type="button" id="drop-photo">Убрать</button>
       </div>
       <input type="file" id="photo-input" accept="image/*" hidden>
-      <div class="pick-title" style="margin-top:20px">Значок</div>
+      <div class="pick-title" style="margin-top:18px">Значок</div>
       <div class="emoji-grid" id="emoji-grid"></div>
       <div class="pick-title">Цвет</div>
       <div class="color-row" id="color-row"></div>
@@ -260,13 +242,13 @@
       <label for="room-input">Название комнаты</label>
       <input type="text" id="room-input" maxlength="64" placeholder="например: pyatnica" autocomplete="off">
     </div>
-    <button class="primary" id="enter" style="width:100%; padding:15px">Войти в комнату</button>
+    <button class="primary" id="enter" style="width:100%">Войти в зал</button>
 
-    <div id="recent" style="display:none; margin-top:24px">
+    <div id="recent" style="display:none; margin-top:20px">
       <div class="pick-title">Вы недавно заходили</div>
       <div class="chips" id="recent-chips"></div>
     </div>
-    <div id="friends" style="display:none; margin-top:22px">
+    <div id="friends" style="display:none; margin-top:20px">
       <div class="pick-title">Свои люди</div>
       <div class="chips" id="friend-chips"></div>
     </div>
@@ -278,22 +260,15 @@
   </div>
 </div>
 
-<!-- ================= КОМНАТА ================= -->
 <div id="room">
   <header>
-    <div class="navpill">
-      <div class="av av-md" id="av-header"></div>
-      <div class="room-name">Вместе <small id="room-label"></small></div>
-    </div>
-    <div class="navpill">
-      <button id="film">Открыть фильм</button>
-      <button id="share">Показать экран</button>
-      <button id="mic">Микрофон</button>
-    </div>
-    <div class="navpill">
-      <button id="invite">Позвать</button>
-      <button id="gear">Звук</button>
-    </div>
+    <div class="av av-md" id="av-header"></div>
+    <div class="room-name serif">Вместе <small id="room-label"></small></div>
+    <button id="film">Открыть фильм</button>
+    <button id="share">Показать экран</button>
+    <button id="mic">Выключить микрофон</button>
+    <button id="invite">Позвать</button>
+    <button id="gear">Звук</button>
     <div class="spacer"></div>
     <div class="status" id="status"></div>
     <button class="danger" id="leave">Выйти</button>
@@ -304,7 +279,7 @@
   <main>
     <div id="stage"></div>
     <aside>
-      <div class="side-title">В комнате</div>
+      <div class="side-title">В зале</div>
       <div id="people"></div>
       <div id="log"></div>
       <form id="chat-form">
@@ -316,7 +291,7 @@
 </div>
 
 <div class="pop" id="settings">
-  <h3>Звук и вид</h3>
+  <h3 class="serif">Звук и вид</h3>
   <div class="set-row">
     <label>Громкость фильма <span id="v-film-val">100%</span></label>
     <input type="range" id="v-film" min="0" max="100" value="100">
@@ -326,31 +301,31 @@
     <input type="range" id="v-voice" min="0" max="100" value="100">
   </div>
   <div class="set-row switch">
-    <span>Киносвет</span>
+    <span>Дневной свет</span>
     <button id="theme-btn" class="ghost">Включить</button>
   </div>
-  <div style="font-size:12.5px; color:var(--dim); line-height:1.6">
-    Тёмный режим для просмотра. Громкость отдельного человека — ползунок под его именем.
+  <div style="font-size:12px; color:var(--dim); line-height:1.55">
+    Громкость отдельного человека — ползунок под его именем.
   </div>
 </div>
 
 <div class="pop" id="invite-pop">
-  <h3>Позвать своих</h3>
-  <div id="invite-preview" style="background:var(--soft); border-radius:16px; padding:16px;
-    font-size:13.5px; line-height:1.65; color:var(--muted); margin-bottom:16px;
-    white-space:pre-wrap"></div>
+  <h3 class="serif">Позвать своих</h3>
+  <div id="invite-preview" style="background:var(--panel-2); border:1px solid var(--line);
+    border-radius:14px; padding:14px; font-size:13.5px; line-height:1.6; color:var(--muted);
+    margin-bottom:14px; white-space:pre-wrap"></div>
   <button class="primary" id="invite-copy" style="width:100%">Скопировать приглашение</button>
 </div>
 
 <div id="crop">
   <div class="crop-box">
-    <h3>Кадрируйте фото</h3>
+    <h3 class="serif">Кадрируйте фото</h3>
     <p>Двигайте пальцем или мышью. Колесо и ползунок — приближение.</p>
     <div id="crop-view">
       <img id="crop-img" alt="">
       <div id="crop-mask"></div>
     </div>
-    <div style="margin-top:16px"><input type="range" id="crop-zoom" min="100" max="320" value="100"></div>
+    <div style="margin-top:14px"><input type="range" id="crop-zoom" min="100" max="320" value="100"></div>
     <div class="crop-actions">
       <button id="crop-cancel">Отмена</button>
       <button class="primary" id="crop-save">Готово</button>
@@ -387,7 +362,7 @@ function detectInAppBrowser(){
 }
 
 const EMOJI=['\u{1F642}','\u{1F60E}','\u{1F431}','\u{1F436}','\u{1F98A}','\u{1F43C}','\u{1F981}','\u{1F438}','\u{1F47E}','\u{1F3A7}','\u{1F355}','\u{1F319}','⚡','\u{1F335}','\u{1F3AE}','\u{1F525}'];
-const COLORS=['#5b5bd6','#3f8ecc','#2c9c6a','#c9873d','#d1483a','#9a58c4','#c95a92','#5d6470'];
+const COLORS=['#d99a4e','#c97b4e','#b8894f','#8a9a5b','#6f8fa8','#9a6f8f','#a8785f','#7f8a84'];
 const PROFILE_KEY='vmeste.profile', ROOMS_KEY='vmeste.rooms', THEME_KEY='vmeste.theme', FRIENDS_KEY='vmeste.friends';
 const rnd=a=>a[Math.floor(Math.random()*a.length)];
 
@@ -620,7 +595,7 @@ function dropPeer(peerId){
   if(st){ clearTimeout(st.failTimer); st.pc.close(); peers.delete(peerId); }
   roster.delete(peerId); meters.delete(peerId);
   removeVideo(peerId); detachAudio(peerId);
-  logSys(((info&&info.name)||'Участник')+' вышел.');
+  logSys(((info&&info.name)||'Участник')+' вышел из зала.');
   renderPeople(); paintInvite();
 }
 
@@ -652,7 +627,7 @@ async function toggleShare(){
   showVideo('me',screenStream,'Вы показываете экран',profile,{wide:true});
   for(const st of peers.values()) for(const t of screenStream.getTracks()) st.pc.addTrack(t,screenStream);
   screenStream.getVideoTracks()[0].addEventListener('ended',stopShare);
-  $('share').textContent='Остановить показ'; $('share').classList.add('act');
+  $('share').textContent='Остановить показ'; $('share').classList.add('danger');
   if(screenStream.getAudioTracks().length===0) logSys('Звук экрана не захвачен. В Chrome при выборе вкладки включите «Поделиться звуком вкладки».');
 }
 function stopShare(){
@@ -661,14 +636,14 @@ function stopShare(){
   for(const st of peers.values()) for(const s of st.pc.getSenders()) if(s.track&&ids.has(s.track.id)) st.pc.removeTrack(s);
   for(const t of screenStream.getTracks()) t.stop();
   screenStream=null; removeVideo('me');
-  $('share').textContent='Показать экран'; $('share').classList.remove('act');
+  $('share').textContent='Показать экран'; $('share').classList.remove('danger');
 }
 function toggleMic(){
   if(!micStream) return;
   const t=micStream.getAudioTracks()[0]; if(!t) return;
   t.enabled=!t.enabled;
-  $('mic').textContent=t.enabled?'Микрофон':'Микрофон выкл.';
-  $('mic').classList.toggle('act',!t.enabled);
+  $('mic').textContent=t.enabled?'Выключить микрофон':'Включить микрофон';
+  $('mic').classList.toggle('danger',!t.enabled);
   renderPeople();
 }
 
@@ -704,7 +679,7 @@ function applySync(msg){
 
 function inviteText(){
   const who=[profile.name].concat([...roster.values()].map(r=>r.name)).filter(Boolean);
-  const list=who.length>1?'Сейчас в комнате: '+who.join(', ')+'.\n':'';
+  const list=who.length>1?'Сейчас в зале: '+who.join(', ')+'.\n':'';
   return 'Смотрим вместе — заходи.\n'+list+location.href+'\n\nНичего ставить не надо, открывается прямо в браузере.';
 }
 function paintInvite(){ $('invite-preview').textContent=inviteText(); }
@@ -741,7 +716,7 @@ async function join(room){
   ws.onmessage=(ev)=>{
     const msg=JSON.parse(ev.data);
     if(msg.type==='joined'){
-      myId=msg.id; setStatus('В сети'); logSys('Вы вошли в комнату «'+room+'».');
+      myId=msg.id; setStatus('В сети'); logSys('Вы вошли в зал «'+room+'».');
       for(const p of msg.peers){
         roster.set(p.id,{name:p.name,avatar:p.avatar});
         rememberFriend(p.name,p.avatar);
@@ -750,7 +725,7 @@ async function join(room){
       renderPeople(); paintInvite();
     }
     else if(msg.type==='peer-joined'){
-      logSys(msg.name+' присоединился.');
+      logSys(msg.name+' вошёл в зал.');
       roster.set(msg.id,{name:msg.name,avatar:msg.avatar});
       rememberFriend(msg.name,msg.avatar);
       const ex=peers.get(msg.id);
@@ -770,7 +745,7 @@ async function join(room){
   };
   ws.onclose=()=>{
     clearTimeout(slow); setStatus('Связь потеряна');
-    banner('Соединение с сервером разорвано.',{label:'Обновить',onClick:()=>location.reload()});
+    banner('Соединение с сервером разорвано.',{label:'Обновить страницу',onClick:()=>location.reload()});
   };
   ws.onerror=()=>setStatus('Ошибка соединения');
 }
@@ -837,7 +812,7 @@ function paintCrop(){
   $('crop-save').onclick=()=>{
     const OUT=160,c=document.createElement('canvas'); c.width=c.height=OUT;
     const ctx=c.getContext('2d'), r=OUT/crop.S, s=crop.fit*crop.zoom*r;
-    ctx.fillStyle='#fff'; ctx.fillRect(0,0,OUT,OUT);
+    ctx.fillStyle='#000'; ctx.fillRect(0,0,OUT,OUT);
     ctx.drawImage(crop.img,crop.x*r,crop.y*r,crop.img.width*s,crop.img.height*s);
     profile.img=c.toDataURL('image/jpeg',0.74);
     saveProfile(); paintPreview(); buildPicker();
@@ -927,13 +902,13 @@ $('chat-form').onsubmit=e=>{
   $('chat-input').value='';
 };
 
-function applyTheme(dark){
-  document.documentElement.classList.toggle('cinema',dark);
-  $('theme-btn').textContent=dark?'Выключить':'Включить';
-  document.querySelector('meta[name=theme-color]').setAttribute('content',dark?'#0b0b0d':'#f6f5f2');
-  try{ localStorage.setItem(THEME_KEY,dark?'1':'0'); }catch{}
+function applyTheme(day){
+  document.documentElement.classList.toggle('day',day);
+  $('theme-btn').textContent=day?'Выключить':'Включить';
+  document.querySelector('meta[name=theme-color]').setAttribute('content',day?'#f7f4ef':'#08090b');
+  try{ localStorage.setItem(THEME_KEY,day?'1':'0'); }catch{}
 }
-$('theme-btn').onclick=()=>applyTheme(!document.documentElement.classList.contains('cinema'));
+$('theme-btn').onclick=()=>applyTheme(!document.documentElement.classList.contains('day'));
 try{ applyTheme(localStorage.getItem(THEME_KEY)==='1'); }catch{}
 
 paintPreview(); buildPicker(); buildRecent(); buildFriends();
@@ -941,8 +916,8 @@ paintPreview(); buildPicker(); buildRecent(); buildFriends();
 (function warnInApp(){
   const inApp=detectInAppBrowser(); if(!inApp) return;
   const box=document.createElement('div');
-  box.style.cssText='background:var(--accent-soft);color:var(--accent);padding:16px;'+
-    'border-radius:16px;font-size:13.5px;line-height:1.6;margin-bottom:22px';
+  box.style.cssText='background:#2b1f0f;border:1px solid var(--amber-dim);color:#f0d5a8;'+
+    'padding:15px;border-radius:14px;font-size:13.5px;line-height:1.6;margin-bottom:20px';
   box.innerHTML='<b>Откройте страницу в обычном браузере.</b><br>Сейчас вы внутри '+escapeHtml(inApp)+
     ', а он не даёт сайтам доступ к микрофону. Нажмите «…» или «⋮» вверху и выберите «Открыть в браузере».';
   const card=document.querySelector('.card');

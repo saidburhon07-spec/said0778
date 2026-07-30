@@ -114,6 +114,11 @@
   #room{display:none; position:relative; z-index:1; height:100vh; height:100dvh;
     grid-template-rows:auto auto minmax(0,1fr)}
   #room.on{display:grid}
+  /* Строки закреплены явно: баннер бывает скрыт, и без этого
+     основной блок уезжал в чужую строку и не растягивался. */
+  #room > header{grid-row:1}
+  #room > #banner{grid-row:2}
+  #room > main{grid-row:3}
   header{display:flex; align-items:center; gap:10px; padding:14px 18px; flex-wrap:wrap}
   .navpill{display:flex; align-items:center; gap:8px; background:var(--card);
     border:1px solid var(--line); border-radius:999px; padding:7px; box-shadow:var(--sh-2)}

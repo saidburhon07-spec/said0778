@@ -181,7 +181,11 @@
     background:var(--panel); border:1px solid var(--line-2); border-radius:18px;
     padding:18px; box-shadow:var(--shadow); animation:rise .2s ease both}
   .pop.on{display:block}
-  .pop h3{margin:0 0 16px; font-size:16px; font-weight:400}
+  .pop-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px}
+  .pop h3{margin:0; font-size:16px; font-weight:400}
+  .pop-close{border:none; background:transparent; color:var(--muted); font-size:18px;
+    line-height:1; padding:4px 8px; border-radius:8px}
+  .pop-close:hover{background:var(--panel-2); color:var(--text)}
   .set-row{margin-bottom:18px}
   .set-row label{display:flex; justify-content:space-between; font-size:12px;
     color:var(--muted); margin-bottom:7px; text-transform:uppercase; letter-spacing:.7px}
@@ -291,7 +295,10 @@
 </div>
 
 <div class="pop" id="settings">
-  <h3 class="serif">Звук и вид</h3>
+  <div class="pop-head">
+    <h3 class="serif">Звук и вид</h3>
+    <button class="pop-close" type="button" data-close="settings" title="Закрыть">✕</button>
+  </div>
   <div class="set-row">
     <label>Громкость фильма <span id="v-film-val">100%</span></label>
     <input type="range" id="v-film" min="0" max="100" value="100">
@@ -315,7 +322,10 @@
 </div>
 
 <div class="pop" id="invite-pop">
-  <h3 class="serif">Позвать своих</h3>
+  <div class="pop-head">
+    <h3 class="serif">Позвать своих</h3>
+    <button class="pop-close" type="button" data-close="invite-pop" title="Закрыть">✕</button>
+  </div>
   <div id="invite-preview" style="background:var(--panel-2); border:1px solid var(--line);
     border-radius:14px; padding:14px; font-size:13.5px; line-height:1.6; color:var(--muted);
     margin-bottom:14px; white-space:pre-wrap"></div>
@@ -451,14 +461,29 @@ function renderPeople(){
     row.appendChild(dot); peopleEl.appendChild(row);
 
     const vol=document.createElement('div'); vol.className='vol';
-    const sl=document.createElement('input'); sl.type='range'; sl.min=0; sl.max=150;
+    const sl=document.createElement('input'); sl.type='range'; sl.min=0; sl.max=100;
     sl.value=Math.round((peerVolume.get(id)??1)*100);
     const val=document.createElement('span'); val.textContent=sl.value+'%';
     sl.oninput=()=>{ peerVolume.set(id,sl.value/100); applyVolumes(); val.textContent=sl.value+'%'; };
     vol.appendChild(sl); vol.appendChild(val); peopleEl.appendChild(vol);
   }
 }
-function applyVolumes(){ for(const [id,el] of audioEls) el.volume=Math.max(0,Math.min(1,(peerVolume.get(id)??1)*voiceMaster)); }
+// Громкость живёт в двух местах: голоса — в <audio>, а звук фильма при показе
+// экрана приходит внутри <video> на плитке. Раньше ползунки трогали только первое,
+// поэтому казалось, что они ничего не делают.
+function applyVolumes(){
+  for(const [id,el] of audioEls){
+    el.volume=Math.max(0,Math.min(1,(peerVolume.get(id)??1)*voiceMaster));
+  }
+  const film=$('v-film').value/100;
+  document.querySelectorAll('#stage .tile video').forEach(v=>{
+    if(v.muted) return;                 // свой собственный показ не трогаем
+    const id=(v.closest('.tile')||{}).id||'';
+    const peerId=id.replace('tile-','');
+    const own=peerVolume.get(peerId)??1;
+    v.volume=Math.max(0,Math.min(1, film*own));
+  });
+}
 
 function tileId(id){ return 'tile-'+id; }
 function makeTile(id,wide){
@@ -492,6 +517,7 @@ function showVideo(id,stream,label,av,opts){
   if(stream&&v.srcObject!==stream) v.srcObject=stream;
   if(id==='me') v.muted=true;
   v.play().catch(()=>{});
+  applyVolumes();   // новая плитка сразу получает нужную громкость
   return t;
 }
 function removeVideo(id){ const e=document.getElementById(tileId(id)); if(e) e.remove(); }
@@ -535,10 +561,14 @@ function addLocalTracks(pc){
   if(screenStream) for(const t of screenStream.getTracks()) pc.addTrack(t,screenStream);
 }
 
-function createPeer(peerId,name,avatar,polite){
-  const pc=new RTCPeerConnection(RTC_CONFIG);
+function createPeer(peerId,name,avatar,polite,opts){
+  // relay:true — заставляем идти через ретранслятор. Помогает, когда провайдер
+  // режет прямое соединение: трафик выглядит как обычное подключение к серверу.
+  const cfg = (opts&&opts.relay) ? Object.assign({},RTC_CONFIG,{iceTransportPolicy:'relay'}) : RTC_CONFIG;
+  const pc=new RTCPeerConnection(cfg);
   const state={pc,name:name||'Гость',avatar:avatar||{emoji:EMOJI[0],color:COLORS[0]},polite,
-    makingOffer:false,ignoreOffer:false,isSettingRemoteAnswerPending:false,failTimer:null,warned:false};
+    makingOffer:false,ignoreOffer:false,isSettingRemoteAnswerPending:false,failTimer:null,warned:false,
+    relayTried:!!(opts&&opts.relay)};
   peers.set(peerId,state);
   addLocalTracks(pc);
   if(!polite){ try{ pc.createDataChannel('keepalive'); }catch{} }
@@ -562,13 +592,22 @@ function createPeer(peerId,name,avatar,polite){
     if(pc.connectionState==='connected'){ clearTimeout(state.failTimer); state.failTimer=null; state.warned=false; hideBanner(); return; }
     if(pc.connectionState==='failed'){
       try{ pc.restartIce(); }catch{}
-      if(state.failTimer||state.warned) return;
+      if(state.failTimer) return;
       state.failTimer=setTimeout(()=>{
         state.failTimer=null;
         if(state.pc.connectionState==='connected') return;
+
+        // Прямая связь не пошла. Пробуем через ретранслятор.
+        // Перестраивает только одна сторона — та, у кого «меньше» номер,
+        // иначе оба начнут переподключаться и будут мешать друг другу.
+        if(!state.relayTried && myId && myId < peerId){
+          rebuildViaRelay(peerId);
+          return;
+        }
+        if(state.warned) return;
         state.warned=true;
-        banner('Связь с участником не устанавливается — скорее всего мешает сеть или провайдер. Помогает мобильный интернет вместо Wi-Fi, или наоборот.');
-      },12000);
+        banner('Связь с участником не устанавливается. Помогает переключиться с Wi-Fi на мобильный интернет (или наоборот). Если не помогает — нужен свой сервер-ретранслятор, я объясню как.');
+      },9000);
     }
   };
   // Новичок пришёл посреди показа — ограничение потока должно распространиться и на него
@@ -576,6 +615,16 @@ function createPeer(peerId,name,avatar,polite){
 
   renderPeople();
   return state;
+}
+
+// Пересобрать соединение так, чтобы весь звук шёл через ретранслятор.
+function rebuildViaRelay(peerId){
+  const old=peers.get(peerId);
+  const info=roster.get(peerId)||{};
+  if(old){ clearTimeout(old.failTimer); try{ old.pc.close(); }catch{} peers.delete(peerId); }
+  removeVideo(peerId); detachAudio(peerId); meters.delete(peerId);
+  logSys('Прямая связь не прошла — пробую через ретранслятор.');
+  createPeer(peerId, info.name||(old&&old.name), info.avatar||(old&&old.avatar), false, {relay:true});
 }
 
 async function handleSignal(peerId,data){
@@ -1012,6 +1061,23 @@ $('mic').onclick=toggleMic;
 $('leave').onclick=leave;
 $('gear').onclick=()=>{ $('invite-pop').classList.remove('on'); $('settings').classList.toggle('on'); };
 $('invite').onclick=()=>{ $('settings').classList.remove('on'); paintInvite(); $('invite-pop').classList.toggle('on'); };
+
+// Из любой панели можно выйти: крестиком, кликом мимо или Escape.
+// Раньше единственным выходом было нажать другую кнопку — легко было застрять.
+function closeAllPops(){ document.querySelectorAll('.pop.on').forEach(p=>p.classList.remove('on')); }
+document.querySelectorAll('.pop-close').forEach(b=>{
+  b.onclick=()=>{ const el=$(b.dataset.close); if(el) el.classList.remove('on'); };
+});
+document.addEventListener('pointerdown',e=>{
+  if(e.target.closest('.pop')) return;
+  if(e.target.closest('#gear')||e.target.closest('#invite')) return;
+  closeAllPops();
+});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape') return;
+  if($('crop').classList.contains('on')){ $('crop').classList.remove('on'); return; }
+  closeAllPops();
+});
 $('invite-copy').onclick=async()=>{
   try{
     await navigator.clipboard.writeText(inviteText());
@@ -1019,8 +1085,18 @@ $('invite-copy').onclick=async()=>{
     setTimeout(()=>{ $('invite-copy').textContent='Скопировать приглашение'; },2200);
   }catch{ prompt('Скопируйте текст вручную:',inviteText()); }
 };
-$('v-film').oninput=()=>{ const v=$('v-film').value; $('v-film-val').textContent=v+'%'; if(filmVideo) filmVideo.volume=v/100; };
-$('v-voice').oninput=()=>{ const v=$('v-voice').value; $('v-voice-val').textContent=v+'%'; voiceMaster=v/100; applyVolumes(); };
+$('v-film').oninput=()=>{
+  const v=$('v-film').value;
+  $('v-film-val').textContent=v+'%';
+  if(filmVideo) filmVideo.volume=v/100;
+  applyVolumes();   // ещё и звук чужого показа экрана
+};
+$('v-voice').oninput=()=>{
+  const v=$('v-voice').value;
+  $('v-voice-val').textContent=v+'%';
+  voiceMaster=v/100;
+  applyVolumes();
+};
 $('chat-form').onsubmit=e=>{
   e.preventDefault();
   const t=$('chat-input').value.trim(); if(!t) return;

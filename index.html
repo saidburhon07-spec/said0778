@@ -300,11 +300,16 @@
     <label>Громкость голосов <span id="v-voice-val">100%</span></label>
     <input type="range" id="v-voice" min="0" max="100" value="100">
   </div>
+  <div class="set-row">
+    <label>Качество показа экрана</label>
+    <div class="chips" id="q-row" style="gap:7px"></div>
+    <div style="font-size:12px; color:var(--dim); line-height:1.5; margin-top:8px" id="q-note"></div>
+  </div>
   <div class="set-row switch">
     <span>Дневной свет</span>
     <button id="theme-btn" class="ghost">Включить</button>
   </div>
-  <div style="font-size:12px; color:var(--dim); line-height:1.55">
+  <div style="font-size:12px; color:var(--dim); line-height:1.55" id="net-stat">
     Громкость отдельного человека — ползунок под его именем.
   </div>
 </div>
@@ -566,6 +571,9 @@ function createPeer(peerId,name,avatar,polite){
       },12000);
     }
   };
+  // Новичок пришёл посреди показа — ограничение потока должно распространиться и на него
+  if(screenStream) setTimeout(()=>{ applySendQuality(); }, 400);
+
   renderPeople();
   return state;
 }
@@ -621,13 +629,56 @@ async function initMic(){
   renderPeople();
 }
 
+// Качество показа экрана. Для фильма плавность важнее чёткости:
+// лучше чуть мягче картинка, чем рывки каждые пару секунд.
+const QUALITY = {
+  high:   { label:'Высокое',  w:1920, h:1080, fps:30, kbps:3500, note:'Чёткая картинка. Нужен быстрый интернет у всех.' },
+  normal: { label:'Обычное',  w:1280, h:720,  fps:30, kbps:1800, note:'Разумная середина. Подходит большинству.' },
+  light:  { label:'Экономное',w:1280, h:720,  fps:24, kbps:900,  note:'Для медленного или мобильного интернета. Фильм не будет замирать.' }
+};
+const QUALITY_KEY='vmeste.quality';
+let shareQuality = (()=>{ try{ const q=localStorage.getItem(QUALITY_KEY); return QUALITY[q]?q:'normal'; }catch{ return 'normal'; } })();
+
+// Ограничиваем поток на стороне отправителя — иначе браузер шлёт столько,
+// сколько сможет, и у получателя со слабым каналом всё сыпется.
+async function applySendQuality(){
+  const q=QUALITY[shareQuality];
+  for(const st of peers.values()){
+    for(const s of st.pc.getSenders()){
+      if(!s.track || s.track.kind!=='video') continue;
+      try{
+        const p=s.getParameters();
+        if(!p.encodings || !p.encodings.length) p.encodings=[{}];
+        p.encodings[0].maxBitrate=q.kbps*1000;
+        p.encodings[0].maxFramerate=q.fps;
+        p.degradationPreference='maintain-framerate';
+        await s.setParameters(p);
+      }catch{}
+    }
+  }
+}
+
 async function toggleShare(){
   if(screenStream) return stopShare();
-  try{ screenStream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:30},audio:true}); }catch{ return; }
+  const q=QUALITY[shareQuality];
+  try{
+    screenStream=await navigator.mediaDevices.getDisplayMedia({
+      video:{ frameRate:{ ideal:q.fps, max:q.fps }, width:{ max:q.w }, height:{ max:q.h } },
+      audio:true
+    });
+  }catch{ return; }
+
+  const vt=screenStream.getVideoTracks()[0];
+  // Подсказка кодеку: это кино, а не текст — беречь плавность, а не резкость
+  try{ vt.contentHint='motion'; }catch{}
+
   showVideo('me',screenStream,'Вы показываете экран',profile,{wide:true});
   for(const st of peers.values()) for(const t of screenStream.getTracks()) st.pc.addTrack(t,screenStream);
-  screenStream.getVideoTracks()[0].addEventListener('ended',stopShare);
+  await applySendQuality();
+
+  vt.addEventListener('ended',stopShare);
   $('share').textContent='Остановить показ'; $('share').classList.add('danger');
+  logSys('Показ экрана: качество «'+q.label.toLowerCase()+'». Если у кого-то подвисает — снизьте его в «Звуке».');
   if(screenStream.getAudioTracks().length===0) logSys('Звук экрана не захвачен. В Chrome при выборе вкладки включите «Поделиться звуком вкладки».');
 }
 function stopShare(){
@@ -864,6 +915,82 @@ function buildFriends(){
   }
 }
 
+function buildQuality(){
+  const row=$('q-row'); row.innerHTML='';
+  for(const key of Object.keys(QUALITY)){
+    const q=QUALITY[key];
+    const b=document.createElement('button'); b.type='button'; b.textContent=q.label;
+    if(key===shareQuality){ b.style.borderColor='var(--amber)'; b.style.color='var(--amber)'; }
+    b.onclick=async()=>{
+      shareQuality=key;
+      try{ localStorage.setItem(QUALITY_KEY,key); }catch{}
+      buildQuality();
+      // Меняем на лету, без перезапуска показа
+      if(screenStream){
+        const vt=screenStream.getVideoTracks()[0];
+        if(vt) try{ await vt.applyConstraints({ frameRate:{ ideal:q.fps, max:q.fps }, width:{ max:q.w }, height:{ max:q.h } }); }catch{}
+        await applySendQuality();
+        logSys('Качество показа: '+q.label.toLowerCase()+'.');
+      }
+    };
+    row.appendChild(b);
+  }
+  $('q-note').textContent=QUALITY[shareQuality].note;
+}
+
+// ---------- Что реально происходит со связью ----------
+const netPrev=new Map();
+let netWarned=false;
+
+async function pollNet(){
+  let inKbps=0, outKbps=0, fps=0, lossPct=0, samples=0;
+  for(const [id,st] of peers){
+    let stats; try{ stats=await st.pc.getStats(); }catch{ continue; }
+    const prev=netPrev.get(id)||{};
+    const now={};
+    stats.forEach(r=>{
+      if(r.type==='inbound-rtp' && r.kind==='video'){
+        now.inB=r.bytesReceived; now.inT=r.timestamp;
+        now.lost=r.packetsLost; now.recv=r.packetsReceived;
+        if(r.framesPerSecond) fps=Math.round(r.framesPerSecond);
+        if(prev.inB!=null && r.timestamp>prev.inT){
+          inKbps+=Math.round((r.bytesReceived-prev.inB)*8/(r.timestamp-prev.inT));
+          const dl=(r.packetsLost||0)-(prev.lost||0), dr=(r.packetsReceived||0)-(prev.recv||0);
+          if(dr+dl>0){ lossPct+=100*dl/(dr+dl); samples++; }
+        }
+      }
+      if(r.type==='outbound-rtp' && r.kind==='video'){
+        now.outB=r.bytesSent; now.outT=r.timestamp;
+        if(prev.outB!=null && r.timestamp>prev.outT){
+          outKbps+=Math.round((r.bytesSent-prev.outB)*8/(r.timestamp-prev.outT));
+        }
+      }
+    });
+    netPrev.set(id,now);
+  }
+  const loss = samples ? lossPct/samples : 0;
+
+  const parts=[];
+  if(outKbps>0) parts.push('отдача '+(outKbps/1000).toFixed(1)+' Мбит/с');
+  if(inKbps>0)  parts.push('приём '+(inKbps/1000).toFixed(1)+' Мбит/с');
+  if(fps>0)     parts.push(fps+' кадр/с');
+  if(loss>0.4)  parts.push('потери '+loss.toFixed(1)+'%');
+  $('net-stat').textContent = parts.length
+    ? parts.join(' · ')
+    : 'Громкость отдельного человека — ползунок под его именем.';
+
+  // Предупреждаем один раз и по делу
+  const bad = (loss>4) || (inKbps>0 && fps>0 && fps<12);
+  if(bad && !netWarned){
+    netWarned=true;
+    banner('Картинка идёт рывками — каналу не хватает скорости. Тот, кто показывает экран, может снизить качество в «Звуке». Ещё надёжнее: каждый открывает свой файл через «Открыть фильм» — тогда видео вообще не идёт по сети.');
+  }
+  if(!bad && loss<1) netWarned=false;
+
+  setTimeout(pollNet, 3000);
+}
+setTimeout(pollNet, 4000);
+
 $('pick-photo').onclick=()=>$('photo-input').click();
 $('drop-photo').onclick=()=>{ profile.img=null; saveProfile(); paintPreview(); buildPicker(); };
 $('photo-input').onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(f) openCropper(f); e.target.value=''; };
@@ -911,7 +1038,7 @@ function applyTheme(day){
 $('theme-btn').onclick=()=>applyTheme(!document.documentElement.classList.contains('day'));
 try{ applyTheme(localStorage.getItem(THEME_KEY)==='1'); }catch{}
 
-paintPreview(); buildPicker(); buildRecent(); buildFriends();
+paintPreview(); buildPicker(); buildRecent(); buildFriends(); buildQuality();
 
 (function warnInApp(){
   const inApp=detectInAppBrowser(); if(!inApp) return;

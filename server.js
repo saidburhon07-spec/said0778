@@ -40,6 +40,62 @@ const MIME = {
   '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
+// ---------- Ретранслятор (TURN) ----------
+// Ключи живут в переменных окружения на сервере и НИКОГДА не попадают в браузер.
+// Клиенту отдаём только короткоживущие логин-пароль, которые Cloudflare выдаёт на сутки.
+
+const TURN_KEY_ID = process.env.TURN_KEY_ID || '';
+const TURN_KEY_API_TOKEN = process.env.TURN_KEY_API_TOKEN || '';
+
+// Запасной вариант, если ключи ещё не прописаны: публичные серверы.
+// Работают через раз, но лучше, чем ничего.
+const FALLBACK_ICE = [
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun.nextcloud.com:443' },
+  {
+    urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'],
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  }
+];
+
+let iceCache = { at: 0, servers: null };
+
+async function getIceServers() {
+  if (!TURN_KEY_ID || !TURN_KEY_API_TOKEN) return { servers: FALLBACK_ICE, source: 'public' };
+
+  // Ходим к Cloudflare не чаще раза в час — выданных данных хватает на сутки.
+  if (iceCache.servers && Date.now() - iceCache.at < 60 * 60 * 1000) {
+    return { servers: iceCache.servers, source: 'cloudflare' };
+  }
+
+  try {
+    const r = await fetch(
+      'https://rtc.live.cloudflare.com/v1/turn/keys/' + TURN_KEY_ID + '/credentials/generate-ice-servers',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + TURN_KEY_API_TOKEN,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ttl: 86400 })
+      }
+    );
+    if (!r.ok) throw new Error('Cloudflare ответил ' + r.status);
+    const data = await r.json();
+    const list = Array.isArray(data.iceServers) ? data.iceServers : [data.iceServers];
+    // К ретранслятору добавляем STUN — прямая связь всегда быстрее и дешевле
+    const servers = [{ urls: 'stun:stun.cloudflare.com:3478' }].concat(list.filter(Boolean));
+    iceCache = { at: Date.now(), servers };
+    return { servers, source: 'cloudflare' };
+  } catch (e) {
+    console.error('TURN: не удалось получить данные Cloudflare —', e.message);
+    return { servers: FALLBACK_ICE, source: 'public' };
+  }
+}
+
 // ---------- HTTP: отдаём статику ----------
 
 const server = http.createServer((req, res) => {
@@ -48,6 +104,18 @@ const server = http.createServer((req, res) => {
     urlPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
   } catch {
     res.writeHead(400).end('Bad request');
+    return;
+  }
+
+  // Данные для связи запрашивает браузер перед входом в комнату
+  if (urlPath === '/ice') {
+    getIceServers().then(({ servers, source }) => {
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store'
+      });
+      res.end(JSON.stringify({ iceServers: servers, source }));
+    });
     return;
   }
 

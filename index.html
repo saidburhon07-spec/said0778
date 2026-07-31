@@ -353,6 +353,8 @@
 <script>
 'use strict';
 
+// Стартовый набор. Настоящий приходит с нашего сервера перед входом в комнату:
+// сервер сам получает у Cloudflare короткоживущие данные и отдаёт их сюда.
 const RTC_CONFIG = {
   iceServers: [
     { urls: 'stun:stun.cloudflare.com:3478' },
@@ -364,6 +366,19 @@ const RTC_CONFIG = {
   ],
   iceCandidatePoolSize: 4
 };
+let iceSource='public';
+
+async function loadIce(){
+  try{
+    const r=await fetch('/ice',{cache:'no-store'});
+    if(!r.ok) return;
+    const d=await r.json();
+    if(Array.isArray(d.iceServers)&&d.iceServers.length){
+      RTC_CONFIG.iceServers=d.iceServers;
+      iceSource=d.source||'public';
+    }
+  }catch{}
+}
 
 function detectInAppBrowser(){
   const ua=navigator.userAgent||'';
@@ -794,6 +809,12 @@ async function join(room){
   head.dataset.peer='me';
   history.replaceState(null,'','/r/'+encodeURIComponent(room));
   setStatus('Подключаюсь…'); paintInvite();
+
+  // Данные ретранслятора нужны ДО первого соединения, иначе связь пойдёт вслепую
+  await loadIce();
+  if(iceSource!=='cloudflare'){
+    logSys('Работаем через публичный ретранслятор — он бывает нестабилен.');
+  }
 
   initMic().then(()=>{
     if(!micStream) return;

@@ -307,16 +307,11 @@
     <label>Громкость голосов <span id="v-voice-val">100%</span></label>
     <input type="range" id="v-voice" min="0" max="100" value="100">
   </div>
-  <div class="set-row">
-    <label>Качество показа экрана</label>
-    <div class="chips" id="q-row" style="gap:7px"></div>
-    <div style="font-size:12px; color:var(--dim); line-height:1.5; margin-top:8px" id="q-note"></div>
-  </div>
   <div class="set-row switch">
     <span>Дневной свет</span>
     <button id="theme-btn" class="ghost">Включить</button>
   </div>
-  <div style="font-size:12px; color:var(--dim); line-height:1.55" id="net-stat">
+  <div style="font-size:12px; color:var(--dim); line-height:1.55" >
     Громкость отдельного человека — ползунок под его именем.
   </div>
 </div>
@@ -353,8 +348,6 @@
 <script>
 'use strict';
 
-// Стартовый набор. Настоящий приходит с нашего сервера перед входом в комнату:
-// сервер сам получает у Cloudflare короткоживущие данные и отдаёт их сюда.
 const RTC_CONFIG = {
   iceServers: [
     { urls: 'stun:stun.cloudflare.com:3478' },
@@ -366,19 +359,6 @@ const RTC_CONFIG = {
   ],
   iceCandidatePoolSize: 4
 };
-let iceSource='public';
-
-async function loadIce(){
-  try{
-    const r=await fetch('/ice',{cache:'no-store'});
-    if(!r.ok) return;
-    const d=await r.json();
-    if(Array.isArray(d.iceServers)&&d.iceServers.length){
-      RTC_CONFIG.iceServers=d.iceServers;
-      iceSource=d.source||'public';
-    }
-  }catch{}
-}
 
 function detectInAppBrowser(){
   const ua=navigator.userAgent||'';
@@ -576,14 +556,10 @@ function addLocalTracks(pc){
   if(screenStream) for(const t of screenStream.getTracks()) pc.addTrack(t,screenStream);
 }
 
-function createPeer(peerId,name,avatar,polite,opts){
-  // relay:true — заставляем идти через ретранслятор. Помогает, когда провайдер
-  // режет прямое соединение: трафик выглядит как обычное подключение к серверу.
-  const cfg = (opts&&opts.relay) ? Object.assign({},RTC_CONFIG,{iceTransportPolicy:'relay'}) : RTC_CONFIG;
-  const pc=new RTCPeerConnection(cfg);
+function createPeer(peerId,name,avatar,polite){
+  const pc=new RTCPeerConnection(RTC_CONFIG);
   const state={pc,name:name||'Гость',avatar:avatar||{emoji:EMOJI[0],color:COLORS[0]},polite,
-    makingOffer:false,ignoreOffer:false,isSettingRemoteAnswerPending:false,failTimer:null,warned:false,
-    relayTried:!!(opts&&opts.relay)};
+    makingOffer:false,ignoreOffer:false,isSettingRemoteAnswerPending:false,failTimer:null,warned:false};
   peers.set(peerId,state);
   addLocalTracks(pc);
   if(!polite){ try{ pc.createDataChannel('keepalive'); }catch{} }
@@ -607,36 +583,18 @@ function createPeer(peerId,name,avatar,polite,opts){
     if(pc.connectionState==='connected'){ clearTimeout(state.failTimer); state.failTimer=null; state.warned=false; hideBanner(); return; }
     if(pc.connectionState==='failed'){
       try{ pc.restartIce(); }catch{}
-      if(state.failTimer) return;
+      if(state.failTimer||state.warned) return;
       state.failTimer=setTimeout(()=>{
         state.failTimer=null;
         if(state.pc.connectionState==='connected') return;
 
-        // Раньше здесь была принудительная пересборка связи через ретранслятор.
-        // Убрано: пока ретранслятор бесплатный и ненадёжный, такой переход
-        // превращал «плохо слышно» в «не слышно совсем». Вернём, когда
-        // подключим свой Cloudflare — тогда запасной путь будет рабочим.
-        if(state.warned) return;
         state.warned=true;
-        banner('Связь с участником не устанавливается. Помогает переключиться с Wi-Fi на мобильный интернет (или наоборот). Если не помогает — нужен свой сервер-ретранслятор, я объясню как.');
-      },9000);
+        banner('Связь с участником не устанавливается — скорее всего мешает сеть или провайдер. Помогает мобильный интернет вместо Wi-Fi, или наоборот.');
+      },12000);
     }
   };
-  // Новичок пришёл посреди показа — ограничение потока должно распространиться и на него
-  if(screenStream) setTimeout(()=>{ applySendQuality(); }, 400);
-
   renderPeople();
   return state;
-}
-
-// Пересобрать соединение так, чтобы весь звук шёл через ретранслятор.
-function rebuildViaRelay(peerId){
-  const old=peers.get(peerId);
-  const info=roster.get(peerId)||{};
-  if(old){ clearTimeout(old.failTimer); try{ old.pc.close(); }catch{} peers.delete(peerId); }
-  removeVideo(peerId); detachAudio(peerId); meters.delete(peerId);
-  logSys('Прямая связь не прошла — пробую через ретранслятор.');
-  createPeer(peerId, info.name||(old&&old.name), info.avatar||(old&&old.avatar), false, {relay:true});
 }
 
 async function handleSignal(peerId,data){
@@ -690,56 +648,13 @@ async function initMic(){
   renderPeople();
 }
 
-// Качество показа экрана. Для фильма плавность важнее чёткости:
-// лучше чуть мягче картинка, чем рывки каждые пару секунд.
-const QUALITY = {
-  high:   { label:'Высокое',  w:1920, h:1080, fps:30, kbps:3500, note:'Чёткая картинка. Нужен быстрый интернет у всех.' },
-  normal: { label:'Обычное',  w:1280, h:720,  fps:30, kbps:1800, note:'Разумная середина. Подходит большинству.' },
-  light:  { label:'Экономное',w:1280, h:720,  fps:24, kbps:900,  note:'Для медленного или мобильного интернета. Фильм не будет замирать.' }
-};
-const QUALITY_KEY='vmeste.quality';
-let shareQuality = (()=>{ try{ const q=localStorage.getItem(QUALITY_KEY); return QUALITY[q]?q:'normal'; }catch{ return 'normal'; } })();
-
-// Ограничиваем поток на стороне отправителя — иначе браузер шлёт столько,
-// сколько сможет, и у получателя со слабым каналом всё сыпется.
-async function applySendQuality(){
-  const q=QUALITY[shareQuality];
-  for(const st of peers.values()){
-    for(const s of st.pc.getSenders()){
-      if(!s.track || s.track.kind!=='video') continue;
-      try{
-        const p=s.getParameters();
-        if(!p.encodings || !p.encodings.length) p.encodings=[{}];
-        p.encodings[0].maxBitrate=q.kbps*1000;
-        p.encodings[0].maxFramerate=q.fps;
-        p.degradationPreference='maintain-framerate';
-        await s.setParameters(p);
-      }catch{}
-    }
-  }
-}
-
 async function toggleShare(){
   if(screenStream) return stopShare();
-  const q=QUALITY[shareQuality];
-  try{
-    screenStream=await navigator.mediaDevices.getDisplayMedia({
-      video:{ frameRate:{ ideal:q.fps, max:q.fps }, width:{ max:q.w }, height:{ max:q.h } },
-      audio:true
-    });
-  }catch{ return; }
-
-  const vt=screenStream.getVideoTracks()[0];
-  // Подсказка кодеку: это кино, а не текст — беречь плавность, а не резкость
-  try{ vt.contentHint='motion'; }catch{}
-
+  try{ screenStream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:30},audio:true}); }catch{ return; }
   showVideo('me',screenStream,'Вы показываете экран',profile,{wide:true});
   for(const st of peers.values()) for(const t of screenStream.getTracks()) st.pc.addTrack(t,screenStream);
-  await applySendQuality();
-
-  vt.addEventListener('ended',stopShare);
+  screenStream.getVideoTracks()[0].addEventListener('ended',stopShare);
   $('share').textContent='Остановить показ'; $('share').classList.add('danger');
-  logSys('Показ экрана: качество «'+q.label.toLowerCase()+'». Если у кого-то подвисает — снизьте его в «Звуке».');
   if(screenStream.getAudioTracks().length===0) logSys('Звук экрана не захвачен. В Chrome при выборе вкладки включите «Поделиться звуком вкладки».');
 }
 function stopShare(){
@@ -806,12 +721,6 @@ async function join(room){
   head.dataset.peer='me';
   history.replaceState(null,'','/r/'+encodeURIComponent(room));
   setStatus('Подключаюсь…'); paintInvite();
-
-  // Данные ретранслятора нужны ДО первого соединения, иначе связь пойдёт вслепую
-  await loadIce();
-  if(iceSource!=='cloudflare'){
-    logSys('Работаем через публичный ретранслятор — он бывает нестабилен.');
-  }
 
   initMic().then(()=>{
     if(!micStream) return;
@@ -982,82 +891,6 @@ function buildFriends(){
   }
 }
 
-function buildQuality(){
-  const row=$('q-row'); row.innerHTML='';
-  for(const key of Object.keys(QUALITY)){
-    const q=QUALITY[key];
-    const b=document.createElement('button'); b.type='button'; b.textContent=q.label;
-    if(key===shareQuality){ b.style.borderColor='var(--amber)'; b.style.color='var(--amber)'; }
-    b.onclick=async()=>{
-      shareQuality=key;
-      try{ localStorage.setItem(QUALITY_KEY,key); }catch{}
-      buildQuality();
-      // Меняем на лету, без перезапуска показа
-      if(screenStream){
-        const vt=screenStream.getVideoTracks()[0];
-        if(vt) try{ await vt.applyConstraints({ frameRate:{ ideal:q.fps, max:q.fps }, width:{ max:q.w }, height:{ max:q.h } }); }catch{}
-        await applySendQuality();
-        logSys('Качество показа: '+q.label.toLowerCase()+'.');
-      }
-    };
-    row.appendChild(b);
-  }
-  $('q-note').textContent=QUALITY[shareQuality].note;
-}
-
-// ---------- Что реально происходит со связью ----------
-const netPrev=new Map();
-let netWarned=false;
-
-async function pollNet(){
-  let inKbps=0, outKbps=0, fps=0, lossPct=0, samples=0;
-  for(const [id,st] of peers){
-    let stats; try{ stats=await st.pc.getStats(); }catch{ continue; }
-    const prev=netPrev.get(id)||{};
-    const now={};
-    stats.forEach(r=>{
-      if(r.type==='inbound-rtp' && r.kind==='video'){
-        now.inB=r.bytesReceived; now.inT=r.timestamp;
-        now.lost=r.packetsLost; now.recv=r.packetsReceived;
-        if(r.framesPerSecond) fps=Math.round(r.framesPerSecond);
-        if(prev.inB!=null && r.timestamp>prev.inT){
-          inKbps+=Math.round((r.bytesReceived-prev.inB)*8/(r.timestamp-prev.inT));
-          const dl=(r.packetsLost||0)-(prev.lost||0), dr=(r.packetsReceived||0)-(prev.recv||0);
-          if(dr+dl>0){ lossPct+=100*dl/(dr+dl); samples++; }
-        }
-      }
-      if(r.type==='outbound-rtp' && r.kind==='video'){
-        now.outB=r.bytesSent; now.outT=r.timestamp;
-        if(prev.outB!=null && r.timestamp>prev.outT){
-          outKbps+=Math.round((r.bytesSent-prev.outB)*8/(r.timestamp-prev.outT));
-        }
-      }
-    });
-    netPrev.set(id,now);
-  }
-  const loss = samples ? lossPct/samples : 0;
-
-  const parts=[];
-  if(outKbps>0) parts.push('отдача '+(outKbps/1000).toFixed(1)+' Мбит/с');
-  if(inKbps>0)  parts.push('приём '+(inKbps/1000).toFixed(1)+' Мбит/с');
-  if(fps>0)     parts.push(fps+' кадр/с');
-  if(loss>0.4)  parts.push('потери '+loss.toFixed(1)+'%');
-  $('net-stat').textContent = parts.length
-    ? parts.join(' · ')
-    : 'Громкость отдельного человека — ползунок под его именем.';
-
-  // Предупреждаем один раз и по делу
-  const bad = (loss>4) || (inKbps>0 && fps>0 && fps<12);
-  if(bad && !netWarned){
-    netWarned=true;
-    banner('Картинка идёт рывками — каналу не хватает скорости. Тот, кто показывает экран, может снизить качество в «Звуке». Ещё надёжнее: каждый открывает свой файл через «Открыть фильм» — тогда видео вообще не идёт по сети.');
-  }
-  if(!bad && loss<1) netWarned=false;
-
-  setTimeout(pollNet, 3000);
-}
-setTimeout(pollNet, 4000);
-
 $('pick-photo').onclick=()=>$('photo-input').click();
 $('drop-photo').onclick=()=>{ profile.img=null; saveProfile(); paintPreview(); buildPicker(); };
 $('photo-input').onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(f) openCropper(f); e.target.value=''; };
@@ -1132,7 +965,7 @@ function applyTheme(day){
 $('theme-btn').onclick=()=>applyTheme(!document.documentElement.classList.contains('day'));
 try{ applyTheme(localStorage.getItem(THEME_KEY)==='1'); }catch{}
 
-paintPreview(); buildPicker(); buildRecent(); buildFriends(); buildQuality();
+paintPreview(); buildPicker(); buildRecent(); buildFriends();
 
 (function warnInApp(){
   const inApp=detectInAppBrowser(); if(!inApp) return;
